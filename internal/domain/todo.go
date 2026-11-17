@@ -31,7 +31,7 @@ type TodoRepository interface {
 	Create(ctx context.Context, todo *Todo) error
 	CreateBulk(ctx context.Context, todos []Todo) ([]Todo, error)
 	GetByID(ctx context.Context, id uint, userID uint) (*Todo, error)
-	GetBulk(ctx context.Context, userID uint, search string, checkFilter *bool, page, pageSize int) ([]Todo, int64, error)
+	GetBulk(ctx context.Context, userID uint, search string, checkFilter *bool, page, limit int) ([]Todo, int64, error)
 	Update(ctx context.Context, todo *Todo) error
 	UpdateBulk(ctx context.Context, userID uint, updates []TodoUpdateItem) ([]Todo, error)
 	DeleteByID(ctx context.Context, id uint, userID uint) (int64, error)

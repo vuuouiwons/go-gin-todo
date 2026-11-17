@@ -10,8 +10,3 @@ type UpdateTodoRequest struct {
 	Message *string `json:"message"`
 	Check   *bool   `json:"check"`
 }
-
-type DeleteTodoRequest struct {
-	ID  uint   `json:"id"`
-	IDs []uint `json:"ids"`
-}

@@ -8,7 +8,7 @@ import (
 )
 
 type TodoUsecase interface {
-	GetBulk(ctx context.Context, userID uint, search string, checkFilter *bool, page, pageSize int) ([]domain.Todo, domain.Pagination, error)
+	GetBulk(ctx context.Context, userID uint, search string, checkFilter *bool, page, limit int) ([]domain.Todo, domain.Pagination, error)
 	GetByID(ctx context.Context, id uint, userID uint) (*domain.Todo, error)
 	CreateOne(ctx context.Context, userID uint, message string, check bool) (*domain.Todo, error)
 	CreateBulk(ctx context.Context, userID uint, items []domain.Todo) ([]domain.Todo, error)
@@ -26,20 +26,20 @@ func NewTodoUsecase(repo domain.TodoRepository) TodoUsecase {
 	return &todoUsecase{repo: repo}
 }
 
-func (u *todoUsecase) GetBulk(ctx context.Context, userID uint, search string, checkFilter *bool, page, pageSize int) ([]domain.Todo, domain.Pagination, error) {
+func (u *todoUsecase) GetBulk(ctx context.Context, userID uint, search string, checkFilter *bool, page, limit int) ([]domain.Todo, domain.Pagination, error) {
 	if page <= 0 {
 		page = 1
 	}
-	if pageSize <= 0 {
-		pageSize = 10
+	if limit <= 0 {
+		limit = 10
 	}
 
-	items, total, err := u.repo.GetBulk(ctx, userID, search, checkFilter, page, pageSize)
+	items, total, err := u.repo.GetBulk(ctx, userID, search, checkFilter, page, limit)
 	if err != nil {
 		return nil, domain.Pagination{}, err
 	}
 
-	pagination := domain.NewPagination(page, pageSize, total)
+	pagination := domain.NewPagination(page, limit, total)
 	return items, pagination, nil
 }
 

@@ -8,7 +8,7 @@ import (
 )
 
 type TodolistUsecase interface {
-	GetBulk(ctx context.Context, userID uint, search string, page, pageSize int) ([]domain.Todolist, domain.Pagination, error)
+	GetBulk(ctx context.Context, userID uint, search string, page, limit int) ([]domain.Todolist, domain.Pagination, error)
 	GetByID(ctx context.Context, id uint, userID uint) (*domain.Todolist, error)
 	CreateOne(ctx context.Context, userID uint, title string) (*domain.Todolist, error)
 	CreateBulk(ctx context.Context, userID uint, titles []string) ([]domain.Todolist, error)
@@ -26,20 +26,20 @@ func NewTodolistUsecase(repo domain.TodolistRepository) TodolistUsecase {
 	return &todolistUsecase{repo: repo}
 }
 
-func (u *todolistUsecase) GetBulk(ctx context.Context, userID uint, search string, page, pageSize int) ([]domain.Todolist, domain.Pagination, error) {
+func (u *todolistUsecase) GetBulk(ctx context.Context, userID uint, search string, page, limit int) ([]domain.Todolist, domain.Pagination, error) {
 	if page <= 0 {
 		page = 1
 	}
-	if pageSize <= 0 {
-		pageSize = 10
+	if limit <= 0 {
+		limit = 10
 	}
 
-	items, total, err := u.repo.GetBulk(ctx, userID, search, page, pageSize)
+	items, total, err := u.repo.GetBulk(ctx, userID, search, page, limit)
 	if err != nil {
 		return nil, domain.Pagination{}, err
 	}
 
-	pagination := domain.NewPagination(page, pageSize, total)
+	pagination := domain.NewPagination(page, limit, total)
 	return items, pagination, nil
 }
 

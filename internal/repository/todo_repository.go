@@ -39,7 +39,7 @@ func (r *todoRepository) GetByID(ctx context.Context, id uint, userID uint) (*do
 	return &item, nil
 }
 
-func (r *todoRepository) GetBulk(ctx context.Context, userID uint, search string, checkFilter *bool, page, pageSize int) ([]domain.Todo, int64, error) {
+func (r *todoRepository) GetBulk(ctx context.Context, userID uint, search string, checkFilter *bool, page, limit int) ([]domain.Todo, int64, error) {
 	query := r.db.WithContext(ctx).Model(&domain.Todo{}).Where(&domain.Todo{UserID: userID})
 
 	if search != "" {
@@ -55,13 +55,13 @@ func (r *todoRepository) GetBulk(ctx context.Context, userID uint, search string
 		return nil, 0, err
 	}
 
-	offset := (page - 1) * pageSize
+	offset := (page - 1) * limit
 	if offset < 0 {
 		offset = 0
 	}
 
 	var items []domain.Todo
-	if err := query.Order("id DESC").Limit(pageSize).Offset(offset).Find(&items).Error; err != nil {
+	if err := query.Order("id DESC").Limit(limit).Offset(offset).Find(&items).Error; err != nil {
 		return nil, 0, err
 	}
 

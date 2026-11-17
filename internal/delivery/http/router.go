@@ -2,6 +2,7 @@ package http
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"go-gin-todo/docs"
@@ -33,7 +34,7 @@ func SetupRouter(
 			"message":        "Clean Architecture Go Gin Todo Server",
 			"prefix":         "/api",
 			"defaultVersion": "v1",
-			"swagger":        "/swagger",
+			"docs":           "/docs",
 			"openapi":        "/openapi.json",
 		})
 	})
@@ -66,12 +67,10 @@ func SetupRouter(
 </body>
 </html>`
 
-	serveSwagger := func(c *gin.Context) {
+	router.GET("/docs", func(c *gin.Context) {
 		c.Header("Content-Type", "text/html; charset=utf-8")
 		c.String(http.StatusOK, swaggerHTML)
-	}
-
-	router.GET("/docs", serveSwagger)
+	})
 
 	// Base API group: /api
 	apiGroup := router.Group("/api")
@@ -85,6 +84,17 @@ func SetupRouter(
 
 	// Register routes on /api/v1
 	registerRoutes(v1Group, tokenManager, authHandler, todolistHandler, todoHandler)
+
+	// Handle unversioned /api/* calls by routing to default version /api/v1/*
+	router.NoRoute(func(c *gin.Context) {
+		path := c.Request.URL.Path
+		if strings.HasPrefix(path, "/api/") && !strings.HasPrefix(path, "/api/v") {
+			c.Request.URL.Path = "/api/v1" + strings.TrimPrefix(path, "/api")
+			router.HandleContext(c)
+			return
+		}
+		c.JSON(http.StatusNotFound, gin.H{"error": "Route not found"})
+	})
 
 	return router
 }

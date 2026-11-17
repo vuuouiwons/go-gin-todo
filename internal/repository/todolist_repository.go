@@ -39,7 +39,7 @@ func (r *todolistRepository) GetByID(ctx context.Context, id uint, userID uint) 
 	return &item, nil
 }
 
-func (r *todolistRepository) GetBulk(ctx context.Context, userID uint, search string, page, pageSize int) ([]domain.Todolist, int64, error) {
+func (r *todolistRepository) GetBulk(ctx context.Context, userID uint, search string, page, limit int) ([]domain.Todolist, int64, error) {
 	query := r.db.WithContext(ctx).Model(&domain.Todolist{}).Where(&domain.Todolist{UserID: userID})
 
 	if search != "" {
@@ -51,13 +51,13 @@ func (r *todolistRepository) GetBulk(ctx context.Context, userID uint, search st
 		return nil, 0, err
 	}
 
-	offset := (page - 1) * pageSize
+	offset := (page - 1) * limit
 	if offset < 0 {
 		offset = 0
 	}
 
 	var items []domain.Todolist
-	if err := query.Order("id DESC").Limit(pageSize).Offset(offset).Find(&items).Error; err != nil {
+	if err := query.Order("id DESC").Limit(limit).Offset(offset).Find(&items).Error; err != nil {
 		return nil, 0, err
 	}
 

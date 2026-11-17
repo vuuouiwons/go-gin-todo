@@ -128,7 +128,7 @@
             "schema": { "type": "integer", "default": 1 }
           },
           {
-            "name": "pageSize",
+            "name": "limit",
             "in": "query",
             "description": "Number of items per page",
             "schema": { "type": "integer", "default": 10 }
@@ -476,7 +476,7 @@
             "schema": { "type": "integer", "default": 1 }
           },
           {
-            "name": "pageSize",
+            "name": "limit",
             "in": "query",
             "description": "Number of items per page",
             "schema": { "type": "integer", "default": 10 }
@@ -918,7 +918,7 @@
         "type": "object",
         "properties": {
           "page": { "type": "integer", "example": 1 },
-          "pageSize": { "type": "integer", "example": 10 },
+          "limit": { "type": "integer", "example": 10 },
           "totalItems": { "type": "integer", "example": 25 },
           "totalPages": { "type": "integer", "example": 3 },
           "hasNext": { "type": "boolean", "example": true },

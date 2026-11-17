@@ -41,11 +41,13 @@ go-gin-todo/
 │   │       ├── dto/                              # Data Transfer Objects (Request/Response)
 │   │       │   ├── auth_dto.go
 │   │       │   ├── todolist_dto.go
-│   │       │   └── todo_dto.go
+│   │       │   ├── todo_dto.go
+│   │       │   └── delete_dto.go                 # Unified Delete Request DTO
 │   │       ├── handler/                          # HTTP Handlers (Controllers)
 │   │       │   ├── auth_handler.go
 │   │       │   ├── todolist_handler.go
-│   │       │   └── todo_handler.go
+│   │       │   ├── todo_handler.go
+│   │       │   └── helpers.go                    # DRY helpers (pagination, ID & delete parsing, error mapping)
 │   │       ├── middleware/                       # HTTP Middlewares (JWT Auth, CORS)
 │   │       │   ├── auth.go
 │   │       │   └── cors.go
@@ -119,8 +121,8 @@ go run cmd/server/main.go
 The server listens on `http://localhost:8080`.
 
 ### Swagger UI & OpenAPI Specification
-- **Interactive Swagger UI**: Open [http://localhost:8080/swagger](http://localhost:8080/swagger) or [http://localhost:8080/docs](http://localhost:8080/docs) in your browser.
-- **OpenAPI 3.0 Specification**: Available at [http://localhost:8080/openapi.json](http://localhost:8080/openapi.json) or in the file [openapi.json](file:///d:/IT-projects/go-gin-todo/openapi.json).
+- **Interactive Swagger UI**: Open [http://localhost:8080/docs](http://localhost:8080/docs) in your browser.
+- **OpenAPI 3.0 Specification**: Available at [http://localhost:8080/openapi.json](http://localhost:8080/openapi.json) or in the file [docs/openapi.json](file:///d:/IT-projects/go-gin-todo/docs/openapi.json).
 
 ### Run Integration Tests
 ```bash
@@ -189,7 +191,7 @@ Authorization: Bearer <your_jwt_token>
 
 Both `GET /api/v1/todolist` and `GET /api/v1/todo` accept standard pagination query parameters:
 - `page`: Page number (1-based, default: `1`)
-- `pageSize`: Items per page (default: `10`, accepts aliases `limit` or `per_page`)
+- `limit`: Items per page (default: `10`)
 
 #### Example Paginated Response:
 ```json
@@ -205,7 +207,7 @@ Both `GET /api/v1/todolist` and `GET /api/v1/todo` accept standard pagination qu
   ],
   "pagination": {
     "page": 1,
-    "pageSize": 10,
+    "limit": 10,
     "totalItems": 42,
     "totalPages": 5,
     "hasNext": true,
@@ -220,7 +222,7 @@ Both `GET /api/v1/todolist` and `GET /api/v1/todo` accept standard pagination qu
 
 | Verb | Path | Description |
 |---|---|---|
-| `GET` | `/api/v1/todolist` | Bulk list for user with pagination (`?page=1`, `?pageSize=10`, `?search=...`) |
+| `GET` | `/api/v1/todolist` | Bulk list for user with pagination (`?page=1`, `?limit=10`, `?search=...`) |
 | `GET` | `/api/v1/todolist/:id` | Get single todolist by ID |
 | `POST` | `/api/v1/todolist` | Create single `{"title": "..."}` or bulk `[{"title": "..."}, ...]` |
 | `PATCH` | `/api/v1/todolist` | Update single `{"id": 1, "title": "..."}` or bulk `[{"id": 1, ...}]` |
@@ -234,7 +236,7 @@ Both `GET /api/v1/todolist` and `GET /api/v1/todo` accept standard pagination qu
 
 | Verb | Path | Description |
 |---|---|---|
-| `GET` | `/api/v1/todo` | Bulk list for user with pagination (`?page=1`, `?pageSize=10`, `?check=true\|false`, `?search=...`) |
+| `GET` | `/api/v1/todo` | Bulk list for user with pagination (`?page=1`, `?limit=10`, `?check=true\|false`, `?search=...`) |
 | `GET` | `/api/v1/todo/:id` | Get single todo by ID |
 | `POST` | `/api/v1/todo` | Create single `{"message": "...", "check": false}` or bulk `[...]` |
 | `PATCH` | `/api/v1/todo` | Update single `{"id": 1, "check": true}` or bulk `[{"id": 1, ...}]` |

@@ -23,7 +23,7 @@ type TodolistRepository interface {
 	Create(ctx context.Context, todolist *Todolist) error
 	CreateBulk(ctx context.Context, todolists []Todolist) ([]Todolist, error)
 	GetByID(ctx context.Context, id uint, userID uint) (*Todolist, error)
-	GetBulk(ctx context.Context, userID uint, search string, page, pageSize int) ([]Todolist, int64, error)
+	GetBulk(ctx context.Context, userID uint, search string, page, limit int) ([]Todolist, int64, error)
 	Update(ctx context.Context, todolist *Todolist) error
 	UpdateBulk(ctx context.Context, userID uint, updates []Todolist) ([]Todolist, error)
 	DeleteByID(ctx context.Context, id uint, userID uint) (int64, error)

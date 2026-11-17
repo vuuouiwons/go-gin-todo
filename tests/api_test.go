@@ -156,10 +156,10 @@ func TestSwaggerAndOpenAPI(t *testing.T) {
 		t.Fatalf("openapi.json missing expected fields: %+v", spec)
 	}
 
-	// Test /swagger endpoint
-	wSwagger := performRequest(testRouter, "GET", "/swagger", nil, "")
+	// Test /docs endpoint (Swagger UI)
+	wSwagger := performRequest(testRouter, "GET", "/docs", nil, "")
 	if wSwagger.Code != http.StatusOK {
-		t.Fatalf("Expected status 200 on /swagger, got %d", wSwagger.Code)
+		t.Fatalf("Expected status 200 on /docs, got %d", wSwagger.Code)
 	}
 }
 
@@ -207,7 +207,7 @@ func TestTodolistCRUD(t *testing.T) {
 	bulkID2 := createdBulk.Data[1].ID
 
 	// GET (bulk): /todolist with pagination
-	wGetBulk := performRequest(testRouter, "GET", "/api/v1/todolist?page=1&pageSize=2", nil, token)
+	wGetBulk := performRequest(testRouter, "GET", "/api/v1/todolist?page=1&limit=2", nil, token)
 	if wGetBulk.Code != http.StatusOK {
 		t.Fatalf("GET bulk todolist failed: %s", wGetBulk.Body.String())
 	}
@@ -215,7 +215,7 @@ func TestTodolistCRUD(t *testing.T) {
 		Data       []struct{ ID uint } `json:"data"`
 		Pagination struct {
 			Page       int   `json:"page"`
-			PageSize   int   `json:"pageSize"`
+			Limit      int   `json:"limit"`
 			TotalItems int64 `json:"totalItems"`
 			TotalPages int   `json:"totalPages"`
 			HasNext    bool  `json:"hasNext"`
@@ -223,7 +223,7 @@ func TestTodolistCRUD(t *testing.T) {
 		} `json:"pagination"`
 	}
 	_ = json.Unmarshal(wGetBulk.Body.Bytes(), &listPageResp)
-	if listPageResp.Pagination.Page != 1 || listPageResp.Pagination.PageSize != 2 || listPageResp.Pagination.TotalItems != 3 {
+	if listPageResp.Pagination.Page != 1 || listPageResp.Pagination.Limit != 2 || listPageResp.Pagination.TotalItems != 3 {
 		t.Fatalf("Unexpected todolist pagination metadata: %+v", listPageResp.Pagination)
 	}
 	if len(listPageResp.Data) != 2 || !listPageResp.Pagination.HasNext {
@@ -324,7 +324,7 @@ func TestTodoCRUD(t *testing.T) {
 	bulkID2 := createdBulk.Data[1].ID
 
 	// GET (bulk): /todo with pagination
-	wGetBulk := performRequest(testRouter, "GET", "/api/v1/todo?page=1&pageSize=2", nil, token)
+	wGetBulk := performRequest(testRouter, "GET", "/api/v1/todo?page=1&limit=2", nil, token)
 	if wGetBulk.Code != http.StatusOK {
 		t.Fatalf("GET bulk todo failed: %s", wGetBulk.Body.String())
 	}
@@ -332,7 +332,7 @@ func TestTodoCRUD(t *testing.T) {
 		Data       []struct{ ID uint } `json:"data"`
 		Pagination struct {
 			Page       int   `json:"page"`
-			PageSize   int   `json:"pageSize"`
+			Limit      int   `json:"limit"`
 			TotalItems int64 `json:"totalItems"`
 			TotalPages int   `json:"totalPages"`
 			HasNext    bool  `json:"hasNext"`
@@ -340,7 +340,7 @@ func TestTodoCRUD(t *testing.T) {
 		} `json:"pagination"`
 	}
 	_ = json.Unmarshal(wGetBulk.Body.Bytes(), &todoPageResp)
-	if todoPageResp.Pagination.Page != 1 || todoPageResp.Pagination.PageSize != 2 || todoPageResp.Pagination.TotalItems != 3 {
+	if todoPageResp.Pagination.Page != 1 || todoPageResp.Pagination.Limit != 2 || todoPageResp.Pagination.TotalItems != 3 {
 		t.Fatalf("Unexpected todo pagination metadata: %+v", todoPageResp.Pagination)
 	}
 	if len(todoPageResp.Data) != 2 || !todoPageResp.Pagination.HasNext {

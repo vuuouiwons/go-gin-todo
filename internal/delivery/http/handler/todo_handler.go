@@ -3,7 +3,6 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strconv"
 
@@ -32,26 +31,7 @@ func (h *TodoHandler) GetBulk(c *gin.Context) {
 
 	search := c.Query("search")
 	checkParam := c.Query("check")
-	pageStr := c.DefaultQuery("page", "1")
-	pageSizeStr := c.DefaultQuery("pageSize", "10")
-
-	// Support pageSize aliases like limit or per_page for convenience
-	if c.Query("pageSize") == "" {
-		if c.Query("limit") != "" {
-			pageSizeStr = c.Query("limit")
-		} else if c.Query("per_page") != "" {
-			pageSizeStr = c.Query("per_page")
-		}
-	}
-
-	page, err := strconv.Atoi(pageStr)
-	if err != nil || page <= 0 {
-		page = 1
-	}
-	pageSize, err := strconv.Atoi(pageSizeStr)
-	if err != nil || pageSize <= 0 {
-		pageSize = 10
-	}
+	page, limit := parsePagination(c)
 
 	var checkFilter *bool
 	if checkParam != "" {
@@ -60,7 +40,7 @@ func (h *TodoHandler) GetBulk(c *gin.Context) {
 		}
 	}
 
-	todos, pagination, err := h.usecase.GetBulk(c.Request.Context(), userID, search, checkFilter, page, pageSize)
+	todos, pagination, err := h.usecase.GetBulk(c.Request.Context(), userID, search, checkFilter, page, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch todos"})
 		return
@@ -80,20 +60,14 @@ func (h *TodoHandler) GetOne(c *gin.Context) {
 		return
 	}
 
-	idParam := c.Param("id")
-	id, err := strconv.ParseUint(idParam, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid todo ID"})
+	id, ok := parseIDParam(c, "todo")
+	if !ok {
 		return
 	}
 
-	todo, err := h.usecase.GetByID(c.Request.Context(), uint(id), userID)
+	todo, err := h.usecase.GetByID(c.Request.Context(), id, userID)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Todo not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch todo"})
+		respondDomainError(c, err, "Todo not found", "", "Failed to fetch todo")
 		return
 	}
 
@@ -120,7 +94,7 @@ func (h *TodoHandler) Create(c *gin.Context) {
 		return
 	}
 
-	// Bulk Array
+	// Bulk Array format: [{"message": "...", "check": false}, ...]
 	if trimmed[0] == '[' {
 		var inputs []dto.CreateTodoRequest
 		if err := json.Unmarshal(trimmed, &inputs); err != nil {
@@ -142,11 +116,7 @@ func (h *TodoHandler) Create(c *gin.Context) {
 
 		created, err := h.usecase.CreateBulk(c.Request.Context(), userID, domainTodos)
 		if err != nil {
-			if errors.Is(err, domain.ErrBadRequest) {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Message cannot be empty for any item"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create todos"})
+			respondDomainError(c, err, "", "Message cannot be empty for any item", "Failed to create todos")
 			return
 		}
 
@@ -158,7 +128,7 @@ func (h *TodoHandler) Create(c *gin.Context) {
 		return
 	}
 
-	// Object (single or wrapped bulk)
+	// Object format: single {"message": "..."} or wrapped bulk {"items": [...]}
 	var wrapped struct {
 		Items   []dto.CreateTodoRequest `json:"items"`
 		Message string                  `json:"message"`
@@ -184,11 +154,7 @@ func (h *TodoHandler) Create(c *gin.Context) {
 
 		created, err := h.usecase.CreateBulk(c.Request.Context(), userID, domainTodos)
 		if err != nil {
-			if errors.Is(err, domain.ErrBadRequest) {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Message cannot be empty for any item"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create todos"})
+			respondDomainError(c, err, "", "Message cannot be empty for any item", "Failed to create todos")
 			return
 		}
 
@@ -208,11 +174,7 @@ func (h *TodoHandler) Create(c *gin.Context) {
 
 	created, err := h.usecase.CreateOne(c.Request.Context(), userID, wrapped.Message, isCheck)
 	if err != nil {
-		if errors.Is(err, domain.ErrBadRequest) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Field 'message' is required"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create todo"})
+		respondDomainError(c, err, "", "Field 'message' is required", "Failed to create todo")
 		return
 	}
 
@@ -292,15 +254,7 @@ func (h *TodoHandler) PatchOneOrBulk(c *gin.Context) {
 
 	updated, err := h.usecase.UpdateBulk(c.Request.Context(), userID, domainUpdates)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "One or more todos not found or unauthorized"})
-			return
-		}
-		if errors.Is(err, domain.ErrBadRequest) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Valid 'id' is required for each item"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update todos"})
+		respondDomainError(c, err, "One or more todos not found or unauthorized", "Valid 'id' is required for each item", "Failed to update todos")
 		return
 	}
 
@@ -326,10 +280,8 @@ func (h *TodoHandler) PatchByID(c *gin.Context) {
 		return
 	}
 
-	idParam := c.Param("id")
-	id, err := strconv.ParseUint(idParam, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid todo ID"})
+	id, ok := parseIDParam(c, "todo")
+	if !ok {
 		return
 	}
 
@@ -342,17 +294,9 @@ func (h *TodoHandler) PatchByID(c *gin.Context) {
 		return
 	}
 
-	updated, err := h.usecase.UpdateByID(c.Request.Context(), uint(id), userID, req.Message, req.Check)
+	updated, err := h.usecase.UpdateByID(c.Request.Context(), id, userID, req.Message, req.Check)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Todo not found"})
-			return
-		}
-		if errors.Is(err, domain.ErrBadRequest) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "At least one of 'message' or 'check' must be provided"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update todo"})
+		respondDomainError(c, err, "Todo not found", "At least one of 'message' or 'check' must be provided", "Failed to update todo")
 		return
 	}
 
@@ -371,40 +315,8 @@ func (h *TodoHandler) DeleteOneOrBulk(c *gin.Context) {
 		return
 	}
 
-	bodyBytes, err := c.GetRawData()
-	if err != nil || len(bodyBytes) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Request body cannot be empty. Deletion IDs must be provided in the body (e.g. [1, 2] or {'id': 1} or {'ids': [1, 2]})"})
-		return
-	}
-
-	trimmed := bytes.TrimSpace(bodyBytes)
-	if len(trimmed) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Request body cannot be empty. Deletion IDs must be provided in the body (e.g. [1, 2] or {'id': 1} or {'ids': [1, 2]})"})
-		return
-	}
-
-	var idsToDelete []uint
-
-	if trimmed[0] == '[' {
-		if err := json.Unmarshal(trimmed, &idsToDelete); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON array of IDs: " + err.Error()})
-			return
-		}
-	} else {
-		var payload dto.DeleteTodoRequest
-		if err := json.Unmarshal(trimmed, &payload); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON object format: " + err.Error()})
-			return
-		}
-		if len(payload.IDs) > 0 {
-			idsToDelete = payload.IDs
-		} else if payload.ID > 0 {
-			idsToDelete = append(idsToDelete, payload.ID)
-		}
-	}
-
-	if len(idsToDelete) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "No ID or IDs specified in body. Provide [1, 2] or {'id': 1} or {'ids': [1, 2]}"})
+	idsToDelete, ok := parseDeleteIDs(c)
+	if !ok {
 		return
 	}
 
@@ -429,14 +341,12 @@ func (h *TodoHandler) DeleteByID(c *gin.Context) {
 		return
 	}
 
-	idParam := c.Param("id")
-	id, err := strconv.ParseUint(idParam, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid todo ID"})
+	id, ok := parseIDParam(c, "todo")
+	if !ok {
 		return
 	}
 
-	deletedCount, err := h.usecase.DeleteByID(c.Request.Context(), uint(id), userID)
+	deletedCount, err := h.usecase.DeleteByID(c.Request.Context(), id, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete todo"})
 		return

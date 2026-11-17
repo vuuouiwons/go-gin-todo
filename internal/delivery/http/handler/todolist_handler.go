@@ -3,9 +3,7 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -32,28 +30,9 @@ func (h *TodolistHandler) GetBulk(c *gin.Context) {
 	}
 
 	search := c.Query("search")
-	pageStr := c.DefaultQuery("page", "1")
-	pageSizeStr := c.DefaultQuery("pageSize", "10")
+	page, limit := parsePagination(c)
 
-	// Support pageSize aliases like limit or per_page for convenience
-	if c.Query("pageSize") == "" {
-		if c.Query("limit") != "" {
-			pageSizeStr = c.Query("limit")
-		} else if c.Query("per_page") != "" {
-			pageSizeStr = c.Query("per_page")
-		}
-	}
-
-	page, err := strconv.Atoi(pageStr)
-	if err != nil || page <= 0 {
-		page = 1
-	}
-	pageSize, err := strconv.Atoi(pageSizeStr)
-	if err != nil || pageSize <= 0 {
-		pageSize = 10
-	}
-
-	todolists, pagination, err := h.usecase.GetBulk(c.Request.Context(), userID, search, page, pageSize)
+	todolists, pagination, err := h.usecase.GetBulk(c.Request.Context(), userID, search, page, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch todolists"})
 		return
@@ -73,20 +52,14 @@ func (h *TodolistHandler) GetOne(c *gin.Context) {
 		return
 	}
 
-	idParam := c.Param("id")
-	id, err := strconv.ParseUint(idParam, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid todolist ID"})
+	id, ok := parseIDParam(c, "todolist")
+	if !ok {
 		return
 	}
 
-	todolist, err := h.usecase.GetByID(c.Request.Context(), uint(id), userID)
+	todolist, err := h.usecase.GetByID(c.Request.Context(), id, userID)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Todolist not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch todolist"})
+		respondDomainError(c, err, "Todolist not found", "", "Failed to fetch todolist")
 		return
 	}
 
@@ -113,7 +86,7 @@ func (h *TodolistHandler) Create(c *gin.Context) {
 		return
 	}
 
-	// Bulk Array
+	// Bulk Array format: [{"title": "..."}, ...]
 	if trimmed[0] == '[' {
 		var inputs []dto.CreateTodolistRequest
 		if err := json.Unmarshal(trimmed, &inputs); err != nil {
@@ -128,11 +101,7 @@ func (h *TodolistHandler) Create(c *gin.Context) {
 
 		created, err := h.usecase.CreateBulk(c.Request.Context(), userID, titles)
 		if err != nil {
-			if errors.Is(err, domain.ErrBadRequest) {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Title cannot be empty for any item"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create todolists"})
+			respondDomainError(c, err, "", "Title cannot be empty for any item", "Failed to create todolists")
 			return
 		}
 
@@ -144,7 +113,7 @@ func (h *TodolistHandler) Create(c *gin.Context) {
 		return
 	}
 
-	// Object (single or wrapped bulk)
+	// Object format: single {"title": "..."} or wrapped bulk {"items": [...]}
 	var wrapped struct {
 		Items []dto.CreateTodolistRequest `json:"items"`
 		Title string                      `json:"title"`
@@ -162,11 +131,7 @@ func (h *TodolistHandler) Create(c *gin.Context) {
 
 		created, err := h.usecase.CreateBulk(c.Request.Context(), userID, titles)
 		if err != nil {
-			if errors.Is(err, domain.ErrBadRequest) {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Title cannot be empty for any item"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create todolists"})
+			respondDomainError(c, err, "", "Title cannot be empty for any item", "Failed to create todolists")
 			return
 		}
 
@@ -181,11 +146,7 @@ func (h *TodolistHandler) Create(c *gin.Context) {
 	// Single item
 	created, err := h.usecase.CreateOne(c.Request.Context(), userID, wrapped.Title)
 	if err != nil {
-		if errors.Is(err, domain.ErrBadRequest) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Field 'title' is required"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create todolist"})
+		respondDomainError(c, err, "", "Field 'title' is required", "Failed to create todolist")
 		return
 	}
 
@@ -262,15 +223,7 @@ func (h *TodolistHandler) PatchOneOrBulk(c *gin.Context) {
 
 	updated, err := h.usecase.UpdateBulk(c.Request.Context(), userID, domainUpdates)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "One or more todolists not found or unauthorized"})
-			return
-		}
-		if errors.Is(err, domain.ErrBadRequest) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Valid 'id' and 'title' are required for each item"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update todolists"})
+		respondDomainError(c, err, "One or more todolists not found or unauthorized", "Valid 'id' and 'title' are required for each item", "Failed to update todolists")
 		return
 	}
 
@@ -296,10 +249,8 @@ func (h *TodolistHandler) PatchByID(c *gin.Context) {
 		return
 	}
 
-	idParam := c.Param("id")
-	id, err := strconv.ParseUint(idParam, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid todolist ID"})
+	id, ok := parseIDParam(c, "todolist")
+	if !ok {
 		return
 	}
 
@@ -309,17 +260,9 @@ func (h *TodolistHandler) PatchByID(c *gin.Context) {
 		return
 	}
 
-	updated, err := h.usecase.UpdateByID(c.Request.Context(), uint(id), userID, req.Title)
+	updated, err := h.usecase.UpdateByID(c.Request.Context(), id, userID, req.Title)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Todolist not found"})
-			return
-		}
-		if errors.Is(err, domain.ErrBadRequest) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Field 'title' cannot be empty"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update todolist"})
+		respondDomainError(c, err, "Todolist not found", "Field 'title' cannot be empty", "Failed to update todolist")
 		return
 	}
 
@@ -338,40 +281,8 @@ func (h *TodolistHandler) DeleteOneOrBulk(c *gin.Context) {
 		return
 	}
 
-	bodyBytes, err := c.GetRawData()
-	if err != nil || len(bodyBytes) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Request body cannot be empty. Deletion IDs must be provided in the body (e.g. [1, 2] or {'id': 1} or {'ids': [1, 2]})"})
-		return
-	}
-
-	trimmed := bytes.TrimSpace(bodyBytes)
-	if len(trimmed) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Request body cannot be empty. Deletion IDs must be provided in the body (e.g. [1, 2] or {'id': 1} or {'ids': [1, 2]})"})
-		return
-	}
-
-	var idsToDelete []uint
-
-	if trimmed[0] == '[' {
-		if err := json.Unmarshal(trimmed, &idsToDelete); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON array of IDs: " + err.Error()})
-			return
-		}
-	} else {
-		var payload dto.DeleteTodolistRequest
-		if err := json.Unmarshal(trimmed, &payload); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON object format: " + err.Error()})
-			return
-		}
-		if len(payload.IDs) > 0 {
-			idsToDelete = payload.IDs
-		} else if payload.ID > 0 {
-			idsToDelete = append(idsToDelete, payload.ID)
-		}
-	}
-
-	if len(idsToDelete) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "No ID or IDs specified in body. Provide [1, 2] or {'id': 1} or {'ids': [1, 2]}"})
+	idsToDelete, ok := parseDeleteIDs(c)
+	if !ok {
 		return
 	}
 
@@ -396,14 +307,12 @@ func (h *TodolistHandler) DeleteByID(c *gin.Context) {
 		return
 	}
 
-	idParam := c.Param("id")
-	id, err := strconv.ParseUint(idParam, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid todolist ID"})
+	id, ok := parseIDParam(c, "todolist")
+	if !ok {
 		return
 	}
 
-	deletedCount, err := h.usecase.DeleteByID(c.Request.Context(), uint(id), userID)
+	deletedCount, err := h.usecase.DeleteByID(c.Request.Context(), id, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete todolist"})
 		return

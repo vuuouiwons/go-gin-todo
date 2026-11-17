@@ -31,11 +31,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"error": "User with this email already exists"})
 			return
 		}
-		if errors.Is(err, domain.ErrBadRequest) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid registration details"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register user"})
+		respondDomainError(c, err, "", "Invalid registration details", "Failed to register user")
 		return
 	}
 
@@ -62,7 +58,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to authenticate user"})
+		respondDomainError(c, err, "", "", "Failed to authenticate user")
 		return
 	}
 
