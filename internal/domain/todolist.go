@@ -5,10 +5,10 @@ import (
 	"time"
 )
 
-// Todolist represents the Todolist table: Todolist (id, userId, title)
+// Todolist represents the Todolist table: Todolist (id, user_id, title)
 type Todolist struct {
 	ID        uint      `gorm:"primaryKey;autoIncrement" json:"id"`
-	UserID    uint      `gorm:"column:userId;index;not null" json:"userId"`
+	UserID    uint      `gorm:"column:user_id;index;not null" json:"userId"`
 	Title     string    `gorm:"column:title;type:varchar(255);not null" json:"title"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`

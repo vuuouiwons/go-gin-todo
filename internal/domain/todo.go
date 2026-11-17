@@ -5,10 +5,10 @@ import (
 	"time"
 )
 
-// Todo represents the Todo table: Todo (id, userId, message, check)
+// Todo represents the Todo table: Todo (id, user_id, message, check)
 type Todo struct {
 	ID        uint      `gorm:"primaryKey;autoIncrement" json:"id"`
-	UserID    uint      `gorm:"column:userId;index;not null" json:"userId"`
+	UserID    uint      `gorm:"column:user_id;index;not null" json:"userId"`
 	Message   string    `gorm:"column:message;type:text;not null" json:"message"`
 	Check     bool      `gorm:"column:check;default:false" json:"check"`
 	CreatedAt time.Time `json:"createdAt"`

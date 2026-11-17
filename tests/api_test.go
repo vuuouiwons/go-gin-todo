@@ -136,6 +136,33 @@ func TestURIVersioning(t *testing.T) {
 	}
 }
 
+// Test Swagger UI and OpenAPI JSON serving
+func TestSwaggerAndOpenAPI(t *testing.T) {
+	// Test /openapi.json endpoint
+	wOpenAPI := performRequest(testRouter, "GET", "/openapi.json", nil, "")
+	if wOpenAPI.Code != http.StatusOK {
+		t.Fatalf("Expected status 200 on /openapi.json, got %d", wOpenAPI.Code)
+	}
+	var spec struct {
+		OpenAPI string `json:"openapi"`
+		Info    struct {
+			Title string `json:"title"`
+		} `json:"info"`
+	}
+	if err := json.Unmarshal(wOpenAPI.Body.Bytes(), &spec); err != nil {
+		t.Fatalf("Failed to parse openapi.json response: %v", err)
+	}
+	if spec.OpenAPI == "" || spec.Info.Title == "" {
+		t.Fatalf("openapi.json missing expected fields: %+v", spec)
+	}
+
+	// Test /swagger endpoint
+	wSwagger := performRequest(testRouter, "GET", "/swagger", nil, "")
+	if wSwagger.Code != http.StatusOK {
+		t.Fatalf("Expected status 200 on /swagger, got %d", wSwagger.Code)
+	}
+}
+
 // 3. Test Todolist CRUD: Single & Bulk operations
 func TestTodolistCRUD(t *testing.T) {
 	token := registerAndLogin(t, "todolist_clean@example.com", "pass1234")

@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"go-gin-todo/docs"
 	"go-gin-todo/internal/config"
 	"go-gin-todo/internal/delivery/http/handler"
 	"go-gin-todo/internal/delivery/http/middleware"
@@ -26,14 +27,51 @@ func SetupRouter(
 	// Global middleware
 	router.Use(middleware.CORSMiddleware())
 
-	// Root welcome / health
+	// Root welcome / info
 	router.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"message":        "Clean Architecture Go Gin Todo Server",
 			"prefix":         "/api",
 			"defaultVersion": "v1",
+			"swagger":        "/swagger",
+			"openapi":        "/openapi.json",
 		})
 	})
+
+	// Serve openapi.json
+	router.GET("/openapi.json", func(c *gin.Context) {
+		c.Data(http.StatusOK, "application/json; charset=utf-8", docs.OpenAPISpec)
+	})
+
+	// Serve Swagger UI
+	swaggerHTML := `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Go Gin Todo API - Swagger UI</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css" />
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    window.onload = () => {
+      window.ui = SwaggerUIBundle({
+        url: '/openapi.json',
+        dom_id: '#swagger-ui',
+      });
+    };
+  </script>
+</body>
+</html>`
+
+	serveSwagger := func(c *gin.Context) {
+		c.Header("Content-Type", "text/html; charset=utf-8")
+		c.String(http.StatusOK, swaggerHTML)
+	}
+
+	router.GET("/docs", serveSwagger)
 
 	// Base API group: /api
 	apiGroup := router.Group("/api")
@@ -47,9 +85,6 @@ func SetupRouter(
 
 	// Register routes on /api/v1
 	registerRoutes(v1Group, tokenManager, authHandler, todolistHandler, todoHandler)
-
-	// Default version is 1: also register directly on /api
-	registerRoutes(apiGroup, tokenManager, authHandler, todolistHandler, todoHandler)
 
 	return router
 }

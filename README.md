@@ -84,7 +84,7 @@ go-gin-todo/
 | Column | Type | Attributes | Description |
 |---|---|---|---|
 | `id` | integer | Primary Key, Auto Increment | Unique List ID |
-| `userId` | integer | Index, Not Null | Owner's User ID |
+| `user_id` | integer | Index, Not Null | Owner's User ID |
 | `title` | varchar(255) | Not Null | List title |
 | `created_at` | datetime | Auto | Timestamp |
 | `updated_at` | datetime | Auto | Timestamp |
@@ -93,7 +93,7 @@ go-gin-todo/
 | Column | Type | Attributes | Description |
 |---|---|---|---|
 | `id` | integer | Primary Key, Auto Increment | Unique Todo ID |
-| `userId` | integer | Index, Not Null | Owner's User ID |
+| `user_id` | integer | Index, Not Null | Owner's User ID |
 | `message` | text | Not Null | Task description |
 | `check` | boolean | Default: `false` | Completion status |
 | `created_at` | datetime | Auto | Timestamp |
@@ -117,6 +117,10 @@ go run cmd/server/main.go
 ```
 
 The server listens on `http://localhost:8080`.
+
+### Swagger UI & OpenAPI Specification
+- **Interactive Swagger UI**: Open [http://localhost:8080/swagger](http://localhost:8080/swagger) or [http://localhost:8080/docs](http://localhost:8080/docs) in your browser.
+- **OpenAPI 3.0 Specification**: Available at [http://localhost:8080/openapi.json](http://localhost:8080/openapi.json) or in the file [openapi.json](file:///d:/IT-projects/go-gin-todo/openapi.json).
 
 ### Run Integration Tests
 ```bash
