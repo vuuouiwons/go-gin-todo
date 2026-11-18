@@ -1,16 +1,33 @@
-package security
+package infra
 
 import (
 	"errors"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"go-gin-todo/internal/domain"
+	"go-gin-todo/internal/app"
+	"golang.org/x/crypto/bcrypt"
 )
 
-type TokenClaims struct {
-	UserID uint   `json:"userId"`
-	Email  string `json:"email"`
+type bcryptHasher struct {
+	cost int
+}
+
+// NewBcryptHasher constructs a bcrypt implementation of app.PasswordHasher.
+func NewBcryptHasher(cost int) app.PasswordHasher {
+	if cost <= 0 {
+		cost = bcrypt.DefaultCost
+	}
+	return &bcryptHasher{cost: cost}
+}
+
+func (b *bcryptHasher) Hash(password string) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), b.cost)
+	return string(bytes), err
+}
+
+func (b *bcryptHasher) Compare(hashedPassword, password string) bool {
+	return bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password)) == nil
 }
 
 type jwtCustomClaims struct {
@@ -19,18 +36,14 @@ type jwtCustomClaims struct {
 	jwt.RegisteredClaims
 }
 
-type TokenManager interface {
-	Generate(userID uint, email string) (string, error)
-	Validate(tokenStr string) (*TokenClaims, error)
-}
-
 type jwtTokenManager struct {
-	secret        []byte
+	secret         []byte
 	expireDuration time.Duration
-	issuer        string
+	issuer         string
 }
 
-func NewJWTTokenManager(secret string, expireHours int) TokenManager {
+// NewJWTTokenManager constructs a JWT implementation of app.TokenManager.
+func NewJWTTokenManager(secret string, expireHours int) app.TokenManager {
 	if expireHours <= 0 {
 		expireHours = 24
 	}
@@ -57,7 +70,7 @@ func (j *jwtTokenManager) Generate(userID uint, email string) (string, error) {
 	return token.SignedString(j.secret)
 }
 
-func (j *jwtTokenManager) Validate(tokenStr string) (*TokenClaims, error) {
+func (j *jwtTokenManager) Validate(tokenStr string) (*app.TokenClaims, error) {
 	claims := &jwtCustomClaims{}
 
 	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
@@ -68,10 +81,10 @@ func (j *jwtTokenManager) Validate(tokenStr string) (*TokenClaims, error) {
 	})
 
 	if err != nil || !token.Valid {
-		return nil, domain.ErrUnauthorized
+		return nil, app.ErrUnauthorized
 	}
 
-	return &TokenClaims{
+	return &app.TokenClaims{
 		UserID: claims.UserID,
 		Email:  claims.Email,
 	}, nil

@@ -1,4 +1,4 @@
-package handler
+package api
 
 import (
 	"bytes"
@@ -9,8 +9,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"go-gin-todo/internal/delivery/http/dto"
-	"go-gin-todo/internal/domain"
+	"go-gin-todo/internal/app"
 )
 
 const (
@@ -18,7 +17,6 @@ const (
 	defaultLimit = 10
 )
 
-// parsePagination extracts and validates page and limit query parameters.
 func parsePagination(c *gin.Context) (int, int) {
 	page, err := strconv.Atoi(c.DefaultQuery("page", strconv.Itoa(defaultPage)))
 	if err != nil || page <= 0 {
@@ -33,7 +31,6 @@ func parsePagination(c *gin.Context) (int, int) {
 	return page, limit
 }
 
-// parseIDParam extracts and validates the :id route parameter.
 func parseIDParam(c *gin.Context, entityName string) (uint, bool) {
 	idParam := c.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 64)
@@ -44,22 +41,25 @@ func parseIDParam(c *gin.Context, entityName string) (uint, bool) {
 	return uint(id), true
 }
 
-// parseDeleteIDs extracts single or bulk deletion IDs strictly from the request body.
-// Supports both JSON array [1, 2] and JSON object {"id": 1} or {"ids": [1, 2]}.
-func parseDeleteIDs(c *gin.Context) ([]uint, bool) {
+func readTrimmedBody(c *gin.Context, emptyErrMsg string) ([]byte, bool) {
 	bodyBytes, err := c.GetRawData()
-	if err != nil || len(bodyBytes) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Request body cannot be empty. Deletion IDs must be provided in the body (e.g. [1, 2] or {'id': 1} or {'ids': [1, 2]})",
-		})
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": emptyErrMsg})
 		return nil, false
 	}
 
 	trimmed := bytes.TrimSpace(bodyBytes)
 	if len(trimmed) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Request body cannot be empty. Deletion IDs must be provided in the body (e.g. [1, 2] or {'id': 1} or {'ids': [1, 2]})",
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"error": emptyErrMsg})
+		return nil, false
+	}
+
+	return trimmed, true
+}
+
+func parseDeleteIDs(c *gin.Context) ([]uint, bool) {
+	trimmed, ok := readTrimmedBody(c, "Request body cannot be empty. Deletion IDs must be provided in the body (e.g. [1, 2] or {'id': 1} or {'ids': [1, 2]})")
+	if !ok {
 		return nil, false
 	}
 
@@ -71,7 +71,7 @@ func parseDeleteIDs(c *gin.Context) ([]uint, bool) {
 			return nil, false
 		}
 	} else {
-		var payload dto.DeleteRequest
+		var payload DeleteRequest
 		if err := json.Unmarshal(trimmed, &payload); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON object format: " + err.Error()})
 			return nil, false
@@ -93,9 +93,8 @@ func parseDeleteIDs(c *gin.Context) ([]uint, bool) {
 	return idsToDelete, true
 }
 
-// respondDomainError maps domain errors to appropriate HTTP status codes and responses.
 func respondDomainError(c *gin.Context, err error, notFoundMsg, badReqMsg, defaultErrMsg string) {
-	if errors.Is(err, domain.ErrNotFound) {
+	if errors.Is(err, app.ErrNotFound) {
 		msg := notFoundMsg
 		if msg == "" {
 			msg = "Resource not found"
@@ -103,7 +102,7 @@ func respondDomainError(c *gin.Context, err error, notFoundMsg, badReqMsg, defau
 		c.JSON(http.StatusNotFound, gin.H{"error": msg})
 		return
 	}
-	if errors.Is(err, domain.ErrBadRequest) {
+	if errors.Is(err, app.ErrBadRequest) {
 		msg := badReqMsg
 		if msg == "" {
 			msg = "Invalid request data"
@@ -111,11 +110,11 @@ func respondDomainError(c *gin.Context, err error, notFoundMsg, badReqMsg, defau
 		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
 		return
 	}
-	if errors.Is(err, domain.ErrUnauthorized) {
+	if errors.Is(err, app.ErrUnauthorized) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
-	if errors.Is(err, domain.ErrConflict) {
+	if errors.Is(err, app.ErrConflict) {
 		c.JSON(http.StatusConflict, gin.H{"error": "Resource conflict"})
 		return
 	}

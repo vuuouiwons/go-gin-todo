@@ -1,71 +1,57 @@
-# Go Gin Todo Backend Server (Clean Architecture)
+# Go Gin Todo Backend Server (Pragmatic Layered Architecture)
 
-A robust RESTful backend API built with Go, the [Gin Web Framework](https://github.com/gin-gonic/gin), and structured according to **Uncle Bob's Clean Architecture**.
+A pragmatic, low-overhead RESTful backend API built with Go and the [Gin Web Framework](https://github.com/gin-gonic/gin), structured according to the **Pragmatic Layered Architecture** defined in [AGENTS.md](file:///d:/IT-projects/go-gin-todo/AGENTS.md).
 
-It features JWT authentication, bcrypt password hashing, pure-Go SQLite persistence with GORM (no CGO required), URI versioning (`v1` as default), and full single/bulk CRUD capabilities for Todolists and Todos.
+It features JWT authentication, bcrypt password hashing, pure-Go SQLite persistence with GORM (no CGO required), URI versioning (`v1` as default), lightweight CQRS (`Commands` & `Queries`), and full single/bulk CRUD capabilities for Todolists and Todos.
 
 ---
 
-## Clean Architecture Layers
+## Pragmatic Layered Architecture
 
-The codebase is organized following the Dependency Rule (dependencies point inward toward the Domain):
+Dependencies flow strictly **inward** toward the `Application` core (`API` → `Application` ← `Infrastructure`), with no `API` ↔ `Infrastructure` cross-imports:
 
 ```text
 go-gin-todo/
-├── cmd/
-│   └── server/
-│       └── main.go                               # Production server entry point
+├── docs/
+│   ├── docs.go                                   # Embedded OpenAPI specification (//go:embed)
+│   └── openapi.json                              # OpenAPI 3.0 specification
 ├── internal/
-│   ├── domain/                                   # 1. Enterprise Business Rules (Entities & Contracts)
-│   │   ├── user.go                               # User entity & UserRepository interface
-│   │   ├── todolist.go                           # Todolist entity & TodolistRepository interface
-│   │   ├── todo.go                               # Todo entity & TodoRepository interface
-│   │   └── errors.go                             # Standard domain error definitions
+│   ├── app/                                      # 1. Application Layer (Core)
+│   │   ├── models.go                             # Core models (User, Todolist, Todo, Pagination) & errors
+│   │   ├── interfaces.go                         # Repository, Transactor, Queryer, Hasher, Token interfaces
+│   │   ├── auth_command.go                       # Register & Login commands
+│   │   ├── todolist_command.go                   # Todolist write commands (business rules & validation)
+│   │   ├── todolist_query.go                     # Todolist reads (direct paginated Queryer + GetByID)
+│   │   ├── todo_command.go                       # Todo write commands (business rules & validation)
+│   │   ├── todo_query.go                         # Todo reads (direct paginated Queryer + GetByID)
+│   │   └── commands_test.go                      # Fast in-memory Unit Tests for Commands
 │   │
-│   ├── usecase/                                  # 2. Application Business Rules (Use Cases)
-│   │   ├── auth_usecase.go                       # Register & Login orchestration
-│   │   ├── todolist_usecase.go                   # Todolist CRUD business logic
-│   │   └── todo_usecase.go                       # Todo CRUD business logic
+│   ├── infra/                                    # 2. Infrastructure Layer (Thin ACL)
+│   │   ├── database.go                           # SQLite connection, migrations, Transactor & Queryer
+│   │   ├── user_repo.go                          # GORM UserRepository (reuses app.User)
+│   │   ├── todolist_repo.go                      # GORM TodolistRepository (reuses app.Todolist)
+│   │   ├── todo_repo.go                          # GORM TodoRepository (reuses app.Todo)
+│   │   └── security.go                           # BcryptHasher & JWTTokenManager
 │   │
-│   ├── repository/                               # 3. Interface Adapters - Persistence (GORM / SQLite)
-│   │   ├── user_repository.go                    # GORM implementation of UserRepository
-│   │   ├── todolist_repository.go                # GORM implementation of TodolistRepository
-│   │   └── todo_repository.go                    # GORM implementation of TodoRepository
+│   ├── api/                                      # 3. API Layer (HTTP Delivery & Security Boundary)
+│   │   ├── dto.go                                # Request/Response DTOs & explicit mappers
+│   │   ├── middleware.go                         # AuthMiddleware, TransactionMiddleware, CORSMiddleware
+│   │   ├── helpers.go                            # Pagination, ID/body parsing, error mapping
+│   │   ├── auth_handler.go                       # Auth HTTP handlers
+│   │   ├── todolist_handler.go                   # Todolist HTTP handlers
+│   │   ├── todo_handler.go                       # Todo HTTP handlers
+│   │   └── router.go                             # Route definitions & URI versioning
 │   │
-│   ├── security/                                 # 3. Infrastructure - Security Adapters
-│   │   ├── password.go                           # PasswordHasher (bcrypt)
-│   │   └── token.go                              # TokenManager (JWT)
-│   │
-│   ├── delivery/
-│   │   └── http/                                 # 3. Interface Adapters - Delivery (Gin HTTP)
-│   │       ├── dto/                              # Data Transfer Objects (Request/Response)
-│   │       │   ├── auth_dto.go
-│   │       │   ├── todolist_dto.go
-│   │       │   ├── todo_dto.go
-│   │       │   └── delete_dto.go                 # Unified Delete Request DTO
-│   │       ├── handler/                          # HTTP Handlers (Controllers)
-│   │       │   ├── auth_handler.go
-│   │       │   ├── todolist_handler.go
-│   │       │   ├── todo_handler.go
-│   │       │   └── helpers.go                    # DRY helpers (pagination, ID & delete parsing, error mapping)
-│   │       ├── middleware/                       # HTTP Middlewares (JWT Auth, CORS)
-│   │       │   ├── auth.go
-│   │       │   └── cors.go
-│   │       └── router.go                         # Route definitions & URI versioning
-│   │
-│   ├── config/                                   # Application configuration & .env loader
-│   │   └── config.go
-│   ├── database/                                 # SQLite pure-Go connection & migrations
-│   │   └── sqlite.go
-│   └── app/                                      # 4. Dependency Injection / Composition Root
-│       └── app.go                                # Wires repos, usecases, security, and handlers
+│   └── config/                                   # Environment & .env configuration loader
+│       └── config.go
 ├── tests/
-│   └── api_test.go                               # Comprehensive integration test suite
+│   ├── integration_test.go                       # Isolated DB tests for Queries, Repos, & Transactions
+│   └── api_test.go                               # HTTP E2E tests across all endpoints
 ├── .env.example
 ├── .gitignore
 ├── go.mod
 ├── go.sum
-├── main.go                                       # Root application entry point
+├── main.go                                       # Composition root & server entry point
 └── README.md
 ```
 
@@ -113,10 +99,6 @@ go-gin-todo/
 ```bash
 go run .
 ```
-or
-```bash
-go run cmd/server/main.go
-```
 
 The server listens on `http://localhost:8080`.
 
@@ -124,9 +106,9 @@ The server listens on `http://localhost:8080`.
 - **Interactive Swagger UI**: Open [http://localhost:8080/docs](http://localhost:8080/docs) in your browser.
 - **OpenAPI 3.0 Specification**: Available at [http://localhost:8080/openapi.json](http://localhost:8080/openapi.json) or in the file [docs/openapi.json](file:///d:/IT-projects/go-gin-todo/docs/openapi.json).
 
-### Run Integration Tests
+### Run Tests (Unit, Integration, and E2E)
 ```bash
-go test -v ./tests/...
+go test -v ./...
 ```
 
 ---

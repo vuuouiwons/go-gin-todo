@@ -1,4 +1,4 @@
-package http
+package api
 
 import (
 	"net/http"
@@ -6,32 +6,28 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go-gin-todo/docs"
-	"go-gin-todo/internal/config"
-	"go-gin-todo/internal/delivery/http/handler"
-	"go-gin-todo/internal/delivery/http/middleware"
-	"go-gin-todo/internal/security"
+	"go-gin-todo/internal/app"
 )
 
+// SetupRouter initializes the Gin engine, middlewares, documentation, and versioned API routes.
 func SetupRouter(
-	cfg *config.Config,
-	tokenManager security.TokenManager,
-	authHandler *handler.AuthHandler,
-	todolistHandler *handler.TodolistHandler,
-	todoHandler *handler.TodoHandler,
+	ginMode string,
+	tokenManager app.TokenManager,
+	transactor app.Transactor,
+	authHandler *AuthHandler,
+	todolistHandler *TodolistHandler,
+	todoHandler *TodoHandler,
 ) *gin.Engine {
-	if cfg.GinMode == "release" {
+	if ginMode == "release" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
 	router := gin.Default()
+	router.Use(CORSMiddleware())
 
-	// Global middleware
-	router.Use(middleware.CORSMiddleware())
-
-	// Root welcome / info
 	router.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
-			"message":        "Clean Architecture Go Gin Todo Server",
+			"message":        "Pragmatic Layered Architecture Go Gin Todo Server",
 			"prefix":         "/api",
 			"defaultVersion": "v1",
 			"docs":           "/docs",
@@ -39,13 +35,11 @@ func SetupRouter(
 		})
 	})
 
-	// Serve openapi.json
 	router.GET("/openapi.json", func(c *gin.Context) {
 		c.Data(http.StatusOK, "application/json; charset=utf-8", docs.OpenAPISpec)
 	})
 
-	// Serve Swagger UI
-	swaggerHTML := `<!DOCTYPE html>
+	const swaggerHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -72,20 +66,16 @@ func SetupRouter(
 		c.String(http.StatusOK, swaggerHTML)
 	})
 
-	// Base API group: /api
 	apiGroup := router.Group("/api")
 	apiGroup.Use(func(c *gin.Context) {
 		c.Header("X-API-Version", "v1")
 		c.Next()
 	})
 
-	// Version 1 group: /api/v1
 	v1Group := apiGroup.Group("/v1")
+	registerRoutes(v1Group, tokenManager, transactor, authHandler, todolistHandler, todoHandler)
 
-	// Register routes on /api/v1
-	registerRoutes(v1Group, tokenManager, authHandler, todolistHandler, todoHandler)
-
-	// Handle unversioned /api/* calls by routing to default version /api/v1/*
+	// Transparently route unversioned /api/* requests to default version /api/v1/*
 	router.NoRoute(func(c *gin.Context) {
 		path := c.Request.URL.Path
 		if strings.HasPrefix(path, "/api/") && !strings.HasPrefix(path, "/api/v") {
@@ -101,50 +91,46 @@ func SetupRouter(
 
 func registerRoutes(
 	rg *gin.RouterGroup,
-	tokenManager security.TokenManager,
-	authHandler *handler.AuthHandler,
-	todolistHandler *handler.TodolistHandler,
-	todoHandler *handler.TodoHandler,
+	tokenManager app.TokenManager,
+	transactor app.Transactor,
+	authHandler *AuthHandler,
+	todolistHandler *TodolistHandler,
+	todoHandler *TodoHandler,
 ) {
+	tx := TransactionMiddleware(transactor)
+
 	rg.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "UP", "version": "v1"})
 	})
 
-	// Public Auth endpoints
-	// 5. POST: /register, /login (use jwt for user auth)
-	rg.POST("/register", authHandler.Register)
+	rg.POST("/register", tx, authHandler.Register)
 	rg.POST("/login", authHandler.Login)
 
-	// Protected routes (JWT middleware)
 	protected := rg.Group("")
-	protected.Use(middleware.AuthMiddleware(tokenManager))
+	protected.Use(AuthMiddleware(tokenManager))
 	{
-		// 1. GET (bulk), POST (one, bulk), PATCH (update by id, one, bulk), DELETE (one, bulk): /todolist
-		// 2. GET (one): /todolist/:id
 		todolistGroup := protected.Group("/todolist")
 		{
 			todolistGroup.GET("", todolistHandler.GetBulk)
-			todolistGroup.POST("", todolistHandler.Create)
-			todolistGroup.PATCH("", todolistHandler.PatchOneOrBulk)
-			todolistGroup.DELETE("", todolistHandler.DeleteOneOrBulk)
+			todolistGroup.POST("", tx, todolistHandler.Create)
+			todolistGroup.PATCH("", tx, todolistHandler.PatchOneOrBulk)
+			todolistGroup.DELETE("", tx, todolistHandler.DeleteOneOrBulk)
 
 			todolistGroup.GET("/:id", todolistHandler.GetOne)
-			todolistGroup.PATCH("/:id", todolistHandler.PatchByID)
-			todolistGroup.DELETE("/:id", todolistHandler.DeleteByID)
+			todolistGroup.PATCH("/:id", tx, todolistHandler.PatchByID)
+			todolistGroup.DELETE("/:id", tx, todolistHandler.DeleteByID)
 		}
 
-		// 3. GET (bulk), POST (one, bulk), PATCH (update by id, one, bulk), DELETE (one, bulk): /todo
-		// 4. GET (one): /todo/:id
 		todoGroup := protected.Group("/todo")
 		{
 			todoGroup.GET("", todoHandler.GetBulk)
-			todoGroup.POST("", todoHandler.Create)
-			todoGroup.PATCH("", todoHandler.PatchOneOrBulk)
-			todoGroup.DELETE("", todoHandler.DeleteOneOrBulk)
+			todoGroup.POST("", tx, todoHandler.Create)
+			todoGroup.PATCH("", tx, todoHandler.PatchOneOrBulk)
+			todoGroup.DELETE("", tx, todoHandler.DeleteOneOrBulk)
 
 			todoGroup.GET("/:id", todoHandler.GetOne)
-			todoGroup.PATCH("/:id", todoHandler.PatchByID)
-			todoGroup.DELETE("/:id", todoHandler.DeleteByID)
+			todoGroup.PATCH("/:id", tx, todoHandler.PatchByID)
+			todoGroup.DELETE("/:id", tx, todoHandler.DeleteByID)
 		}
 	}
 }
