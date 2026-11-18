@@ -47,8 +47,10 @@ go-gin-todo/
 ├── tests/
 │   ├── integration_test.go                       # Isolated DB tests for Queries, Repos, & Transactions
 │   └── api_test.go                               # HTTP E2E tests across all endpoints
+├── .dockerignore
 ├── .env.example
 ├── .gitignore
+├── Dockerfile
 ├── go.mod
 ├── go.sum
 ├── main.go                                       # Composition root & server entry point
@@ -101,6 +103,14 @@ go run .
 ```
 
 The server listens on `http://localhost:8080`.
+
+### Run with Docker
+```bash
+docker build -t go-gin-todo .
+docker run -d --name go-gin-todo -p 8080:8080 -e JWT_SECRET=change-me -v todo_data:/data go-gin-todo
+```
+
+The container persists SQLite data in `/data/todo.db`, runs as non-root `appuser`, and exposes port `8080`.
 
 ### Swagger UI & OpenAPI Specification
 - **Interactive Swagger UI**: Open [http://localhost:8080/docs](http://localhost:8080/docs) in your browser.

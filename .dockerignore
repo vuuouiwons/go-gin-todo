@@ -1,0 +1,34 @@
+# Version control
+.git
+.gitignore
+
+# IDE and editor files
+.idea
+.vscode
+*.swp
+*.swo
+
+# Local environment secrets
+.env
+.env.*
+
+# SQLite databases
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Compiled binaries and build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+dist/
+
+# Tests and documentation (keep docs/ for embedded openapi.json)
+tests/
+*_test.go
+README.md
+AGENTS.md
