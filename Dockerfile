@@ -17,7 +17,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/server 
 # Stage 2: Minimal runtime image
 FROM alpine:3.21
 
-RUN apk add --no-cache ca-certificates tzdata && \
+RUN apk add --no-cache ca-certificates tzdata curl && \
     addgroup -S appgroup && \
     adduser -S appuser -G appgroup && \
     mkdir -p /data && \
@@ -35,5 +35,11 @@ USER appuser
 
 VOLUME ["/data"]
 EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:${PORT}/api/v1/health || exit 1
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:${PORT}/api/v1/health || exit 1
 
 ENTRYPOINT ["/app/server"]
