@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-
-	"gorm.io/gorm/clause"
 )
 
 // TodoQueries handles read operations for Todos.
@@ -38,27 +36,24 @@ func (q *TodoQueries) GetBulk(ctx context.Context, userID uint, search string, c
 		limit = 10
 	}
 
-	query := q.q.DB(ctx).Model(&Todo{}).Where(&Todo{UserID: userID})
+	base := q.q.DB(ctx).Model(&Todo{}).Where("user_id = ?", userID)
 
 	if search != "" {
-		query = query.Clauses(clause.Like{Column: "message", Value: "%" + search + "%"})
+		base = base.Where("message LIKE ?", "%"+search+"%")
 	}
 
 	if checkFilter != nil {
-		query = query.Where(map[string]interface{}{"check": *checkFilter})
+		base = base.Where("`check` = ?", *checkFilter)
 	}
 
 	var total int64
-	if err := query.Count(&total).Error; err != nil {
+	if err := base.Count(&total).Error; err != nil {
 		return nil, Pagination{}, err
 	}
 
 	offset := (page - 1) * limit
 	var items []Todo
-	if err := query.Order(clause.OrderByColumn{Column: clause.Column{Name: "id"}, Desc: true}).
-		Limit(limit).
-		Offset(offset).
-		Find(&items).Error; err != nil {
+	if err := base.Order("id DESC").Limit(limit).Offset(offset).Find(&items).Error; err != nil {
 		return nil, Pagination{}, err
 	}
 

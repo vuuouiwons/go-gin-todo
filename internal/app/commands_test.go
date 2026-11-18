@@ -78,14 +78,6 @@ func (m *mockUserRepo) Create(_ context.Context, user *User) error {
 	return nil
 }
 
-func (m *mockUserRepo) GetByID(_ context.Context, id uint) (*User, error) {
-	u, ok := m.users[id]
-	if !ok {
-		return nil, ErrNotFound
-	}
-	return &u, nil
-}
-
 func (m *mockUserRepo) GetByEmail(_ context.Context, email string) (*User, error) {
 	for _, u := range m.users {
 		if u.Email == email {
@@ -157,6 +149,26 @@ func (m *mockTodolistRepo) Update(_ context.Context, todolist *Todolist) error {
 	}
 	m.items[todolist.ID] = *todolist
 	return nil
+}
+
+func (m *mockTodolistRepo) UpdateBulk(_ context.Context, userID uint, updates []Todolist) ([]Todolist, error) {
+	if m.failSave {
+		return nil, errors.New("db error")
+	}
+	for _, u := range updates {
+		item, ok := m.items[u.ID]
+		if !ok || item.UserID != userID {
+			return nil, ErrNotFound
+		}
+	}
+	out := make([]Todolist, len(updates))
+	for i, u := range updates {
+		item := m.items[u.ID]
+		item.Title = u.Title
+		m.items[u.ID] = item
+		out[i] = item
+	}
+	return out, nil
 }
 
 func (m *mockTodolistRepo) DeleteByID(_ context.Context, id, userID uint) (int64, error) {
@@ -243,6 +255,31 @@ func (m *mockTodoRepo) Update(_ context.Context, todo *Todo) error {
 	return nil
 }
 
+func (m *mockTodoRepo) UpdateBulk(_ context.Context, userID uint, updates []TodoUpdateItem) ([]Todo, error) {
+	if m.failSave {
+		return nil, errors.New("db error")
+	}
+	for _, u := range updates {
+		item, ok := m.items[u.ID]
+		if !ok || item.UserID != userID {
+			return nil, ErrNotFound
+		}
+	}
+	out := make([]Todo, len(updates))
+	for i, u := range updates {
+		item := m.items[u.ID]
+		if u.Message != nil {
+			item.Message = *u.Message
+		}
+		if u.Check != nil {
+			item.Check = *u.Check
+		}
+		m.items[u.ID] = item
+		out[i] = item
+	}
+	return out, nil
+}
+
 func (m *mockTodoRepo) DeleteByID(_ context.Context, id, userID uint) (int64, error) {
 	item, ok := m.items[id]
 	if !ok || item.UserID != userID {
@@ -271,7 +308,8 @@ func TestAuthCommands(t *testing.T) {
 	userRepo := newMockUserRepo()
 	hasher := &mockHasher{}
 	tm := &mockTokenManager{}
-	cmd := NewAuthCommands(userRepo, hasher, tm)
+	tx := &mockTransactor{}
+	cmd := NewAuthCommands(userRepo, hasher, tm, tx)
 
 	t.Run("Register invalid input", func(t *testing.T) {
 		if _, err := cmd.Register(ctx, "  ", "secret123"); !errors.Is(err, ErrBadRequest) {
@@ -320,7 +358,7 @@ func TestTodolistCommands(t *testing.T) {
 	ctx := context.Background()
 	repo := newMockTodolistRepo()
 	tx := &mockTransactor{snapshot: repo.snapshot, rollback: repo.rollback}
-	cmd := NewTodolistCommands(repo)
+	cmd := NewTodolistCommands(repo, tx)
 
 	t.Run("CreateOne and validation", func(t *testing.T) {
 		if _, err := cmd.CreateOne(ctx, 1, "   "); !errors.Is(err, ErrBadRequest) {
@@ -355,17 +393,15 @@ func TestTodolistCommands(t *testing.T) {
 		}
 	})
 
-	t.Run("UpdateBulk propagates error and rolls back inside Transactor", func(t *testing.T) {
+	t.Run("UpdateBulk executes via RunInTx and rolls back on failure", func(t *testing.T) {
 		// Create item owned by user 2
 		other, _ := cmd.CreateOne(ctx, 2, "Other User List")
+		tx.calls = 0
 
-		// Attempt bulk update for user 1 inside transaction: ID 1 succeeds, then other.ID fails -> rollback keeps ID 1 unchanged
-		err := tx.ExecInTransaction(ctx, func(txCtx context.Context) error {
-			_, err := cmd.UpdateBulk(txCtx, 1, []Todolist{
-				{ID: 1, Title: "Should Roll Back"},
-				{ID: other.ID, Title: "Cannot Touch"},
-			})
-			return err
+		// Attempt bulk update for user 1: ID 1 succeeds, then other.ID fails -> rollback keeps ID 1 unchanged
+		_, err := cmd.UpdateBulk(ctx, 1, []Todolist{
+			{ID: 1, Title: "Should Roll Back"},
+			{ID: other.ID, Title: "Cannot Touch"},
 		})
 		if !errors.Is(err, ErrNotFound) {
 			t.Fatalf("expected ErrNotFound during bulk update, got %v", err)
@@ -383,8 +419,8 @@ func TestTodolistCommands(t *testing.T) {
 			{ID: 1, Title: "Work Final"},
 			{ID: 2, Title: "Home Final"},
 		})
-		if err != nil || len(updated) != 2 || updated[0].Title != "Work Final" {
-			t.Fatalf("unexpected bulk update commit result: %+v, err=%v", updated, err)
+		if err != nil || len(updated) != 2 || updated[0].Title != "Work Final" || tx.calls != 2 {
+			t.Fatalf("unexpected bulk update commit result: %+v, tx.calls=%d, err=%v", updated, tx.calls, err)
 		}
 	})
 
@@ -410,7 +446,7 @@ func TestTodoCommands(t *testing.T) {
 	ctx := context.Background()
 	repo := newMockTodoRepo()
 	tx := &mockTransactor{snapshot: repo.snapshot, rollback: repo.rollback}
-	cmd := NewTodoCommands(repo)
+	cmd := NewTodoCommands(repo, tx)
 
 	t.Run("CreateOne and CreateBulk", func(t *testing.T) {
 		if _, err := cmd.CreateOne(ctx, 1, "  ", false); !errors.Is(err, ErrBadRequest) {
@@ -446,15 +482,13 @@ func TestTodoCommands(t *testing.T) {
 		}
 	})
 
-	t.Run("UpdateBulk propagates error and rolls back inside Transactor", func(t *testing.T) {
+	t.Run("UpdateBulk executes via RunInTx and rolls back on error", func(t *testing.T) {
+		tx.calls = 0
 		msg := "Updated Task 1"
 		falseVal := false
-		err := tx.ExecInTransaction(ctx, func(txCtx context.Context) error {
-			_, err := cmd.UpdateBulk(txCtx, 1, []TodoUpdateItem{
-				{ID: 1, Message: &msg, Check: &falseVal},
-				{ID: 999, Check: &falseVal},
-			})
-			return err
+		_, err := cmd.UpdateBulk(ctx, 1, []TodoUpdateItem{
+			{ID: 1, Message: &msg, Check: &falseVal},
+			{ID: 999, Check: &falseVal},
 		})
 		if !errors.Is(err, ErrNotFound) {
 			t.Fatalf("expected ErrNotFound, got %v", err)
@@ -471,8 +505,8 @@ func TestTodoCommands(t *testing.T) {
 		res, err := cmd.UpdateBulk(ctx, 1, []TodoUpdateItem{
 			{ID: 1, Message: &msg, Check: &falseVal},
 		})
-		if err != nil || len(res) != 1 || res[0].Message != "Updated Task 1" || res[0].Check {
-			t.Fatalf("expected committed update, got %+v, err=%v", res, err)
+		if err != nil || len(res) != 1 || res[0].Message != "Updated Task 1" || res[0].Check || tx.calls != 2 {
+			t.Fatalf("expected committed update, got %+v, tx.calls=%d, err=%v", res, tx.calls, err)
 		}
 	})
 

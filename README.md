@@ -18,11 +18,11 @@ go-gin-todo/
 ├── internal/
 │   ├── app/                                      # 1. Application Layer (Core)
 │   │   ├── models.go                             # Core models (User, Todolist, Todo, Pagination) & errors
-│   │   ├── interfaces.go                         # Repository, Transactor, Queryer, Hasher, Token interfaces
+│   │   ├── interfaces.go                         # Repository, Transactor (+ RunInTx), Queryer, Hasher, Token
 │   │   ├── auth_command.go                       # Register & Login commands
-│   │   ├── todolist_command.go                   # Todolist write commands (business rules & validation)
+│   │   ├── todolist_command.go                   # Todolist write commands & RunInTx orchestration
 │   │   ├── todolist_query.go                     # Todolist reads (direct paginated Queryer + GetByID)
-│   │   ├── todo_command.go                       # Todo write commands (business rules & validation)
+│   │   ├── todo_command.go                       # Todo write commands & RunInTx orchestration
 │   │   ├── todo_query.go                         # Todo reads (direct paginated Queryer + GetByID)
 │   │   └── commands_test.go                      # Fast in-memory Unit Tests for Commands
 │   │
@@ -35,7 +35,7 @@ go-gin-todo/
 │   │
 │   ├── api/                                      # 3. API Layer (HTTP Delivery & Security Boundary)
 │   │   ├── dto.go                                # Request/Response DTOs & explicit mappers
-│   │   ├── middleware.go                         # AuthMiddleware, TransactionMiddleware, CORSMiddleware
+│   │   ├── middleware.go                         # AuthMiddleware & CORSMiddleware
 │   │   ├── helpers.go                            # Pagination, ID/body parsing, error mapping
 │   │   ├── auth_handler.go                       # Auth HTTP handlers
 │   │   ├── todolist_handler.go                   # Todolist HTTP handlers

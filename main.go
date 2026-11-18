@@ -38,10 +38,10 @@ func main() {
 	tokenManager := infra.NewJWTTokenManager(cfg.JWTSecret, cfg.JWTExpiresInHours)
 
 	// 2. Application layer (Commands & Queries)
-	authCommands := app.NewAuthCommands(userRepo, hasher, tokenManager)
-	todolistCommands := app.NewTodolistCommands(todolistRepo)
+	authCommands := app.NewAuthCommands(userRepo, hasher, tokenManager, dbAdapter)
+	todolistCommands := app.NewTodolistCommands(todolistRepo, dbAdapter)
 	todolistQueries := app.NewTodolistQueries(dbAdapter, todolistRepo)
-	todoCommands := app.NewTodoCommands(todoRepo)
+	todoCommands := app.NewTodoCommands(todoRepo, dbAdapter)
 	todoQueries := app.NewTodoQueries(dbAdapter, todoRepo)
 
 	// 3. API layer (Handlers & Router)
@@ -49,7 +49,7 @@ func main() {
 	todolistHandler := api.NewTodolistHandler(todolistCommands, todolistQueries)
 	todoHandler := api.NewTodoHandler(todoCommands, todoQueries)
 
-	router := api.SetupRouter(cfg.GinMode, tokenManager, dbAdapter, authHandler, todolistHandler, todoHandler)
+	router := api.SetupRouter(cfg.GinMode, tokenManager, authHandler, todolistHandler, todoHandler)
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.Port,

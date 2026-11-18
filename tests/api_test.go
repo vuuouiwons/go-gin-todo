@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -49,17 +50,17 @@ func TestMain(m *testing.M) {
 	hasher := infra.NewBcryptHasher(0)
 	tokenManager := infra.NewJWTTokenManager(cfg.JWTSecret, cfg.JWTExpiresInHours)
 
-	authHandler := api.NewAuthHandler(app.NewAuthCommands(userRepo, hasher, tokenManager))
+	authHandler := api.NewAuthHandler(app.NewAuthCommands(userRepo, hasher, tokenManager, dbAdapter))
 	todolistHandler := api.NewTodolistHandler(
-		app.NewTodolistCommands(todolistRepo),
+		app.NewTodolistCommands(todolistRepo, dbAdapter),
 		app.NewTodolistQueries(dbAdapter, todolistRepo),
 	)
 	todoHandler := api.NewTodoHandler(
-		app.NewTodoCommands(todoRepo),
+		app.NewTodoCommands(todoRepo, dbAdapter),
 		app.NewTodoQueries(dbAdapter, todoRepo),
 	)
 
-	testRouter = api.SetupRouter(cfg.GinMode, tokenManager, dbAdapter, authHandler, todolistHandler, todoHandler)
+	testRouter = api.SetupRouter(cfg.GinMode, tokenManager, authHandler, todolistHandler, todoHandler)
 
 	code := m.Run()
 
@@ -472,7 +473,7 @@ func TestUserDataIsolation(t *testing.T) {
 		t.Errorf("Expected 404 for User B deleting User A's todo, got %d", wDelB.Code)
 	}
 
-	// Verify TransactionMiddleware rollback over HTTP:
+	// Verify RunInTx transaction rollback over HTTP:
 	// User B creates a list, then User A sends a bulk PATCH modifying both User A's list and User B's list.
 	// Expect 404 Not Found AND User A's list must remain "Secret List A".
 	wListB := performRequest(testRouter, "POST", "/api/v1/todolist", []byte(`{"title":"Secret List B"}`), tokenB)
@@ -503,6 +504,43 @@ func TestUserDataIsolation(t *testing.T) {
 	}
 	_ = json.Unmarshal(wVerifyA.Body.Bytes(), &verifyResp)
 	if verifyResp.Data.Title != "Secret List A" {
-		t.Errorf("Expected TransactionMiddleware to roll back User A's title to 'Secret List A', got %q", verifyResp.Data.Title)
+		t.Errorf("Expected RunInTx rollback to preserve User A's title 'Secret List A', got %q", verifyResp.Data.Title)
+	}
+}
+
+func TestTransactionLogsDemo(t *testing.T) {
+	log.Println("--- 1. POST /api/v1/register (201 -> COMMIT) ---")
+	wReg := performRequest(testRouter, "POST", "/api/v1/register", []byte(`{"email":"tx@test.com","password":"password123"}`), "")
+	if wReg.Code != http.StatusCreated {
+		t.Fatalf("expected 201 on register, got %d: %s", wReg.Code, wReg.Body.String())
+	}
+
+	wLogin := performRequest(testRouter, "POST", "/api/v1/login", []byte(`{"email":"tx@test.com","password":"password123"}`), "")
+	if wLogin.Code != http.StatusOK {
+		t.Fatalf("expected 200 on login, got %d: %s", wLogin.Code, wLogin.Body.String())
+	}
+	var loginResp struct {
+		Token string `json:"token"`
+	}
+	_ = json.Unmarshal(wLogin.Body.Bytes(), &loginResp)
+
+	log.Println("--- 2. POST /api/v1/todo bulk create (201 -> COMMIT) ---")
+	wBulkCreate := performRequest(testRouter, "POST", "/api/v1/todo", []byte(`[{"message":"Todo 1"},{"message":"Todo 2"}]`), loginResp.Token)
+	if wBulkCreate.Code != http.StatusCreated {
+		t.Fatalf("expected 201 on bulk create, got %d: %s", wBulkCreate.Code, wBulkCreate.Body.String())
+	}
+	var createResp struct {
+		Data []struct {
+			ID uint `json:"id"`
+		} `json:"data"`
+	}
+	_ = json.Unmarshal(wBulkCreate.Body.Bytes(), &createResp)
+	firstID := createResp.Data[0].ID
+
+	log.Println("--- 3. PATCH /api/v1/todo where 2nd item is missing (404 -> ROLLBACK) ---")
+	patchPayload := fmt.Sprintf(`[{"id":%d,"message":"Todo 1 Mutated"},{"id":999,"message":"Missing"}]`, firstID)
+	wPatch := performRequest(testRouter, "PATCH", "/api/v1/todo", []byte(patchPayload), loginResp.Token)
+	if wPatch.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 on missing 2nd item, got %d: %s", wPatch.Code, wPatch.Body.String())
 	}
 }

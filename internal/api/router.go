@@ -13,7 +13,6 @@ import (
 func SetupRouter(
 	ginMode string,
 	tokenManager app.TokenManager,
-	transactor app.Transactor,
 	authHandler *AuthHandler,
 	todolistHandler *TodolistHandler,
 	todoHandler *TodoHandler,
@@ -73,7 +72,7 @@ func SetupRouter(
 	})
 
 	v1Group := apiGroup.Group("/v1")
-	registerRoutes(v1Group, tokenManager, transactor, authHandler, todolistHandler, todoHandler)
+	registerRoutes(v1Group, tokenManager, authHandler, todolistHandler, todoHandler)
 
 	// Transparently route unversioned /api/* requests to default version /api/v1/*
 	router.NoRoute(func(c *gin.Context) {
@@ -92,18 +91,15 @@ func SetupRouter(
 func registerRoutes(
 	rg *gin.RouterGroup,
 	tokenManager app.TokenManager,
-	transactor app.Transactor,
 	authHandler *AuthHandler,
 	todolistHandler *TodolistHandler,
 	todoHandler *TodoHandler,
 ) {
-	tx := TransactionMiddleware(transactor)
-
 	rg.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "UP", "version": "v1"})
 	})
 
-	rg.POST("/register", tx, authHandler.Register)
+	rg.POST("/register", authHandler.Register)
 	rg.POST("/login", authHandler.Login)
 
 	protected := rg.Group("")
@@ -112,25 +108,25 @@ func registerRoutes(
 		todolistGroup := protected.Group("/todolist")
 		{
 			todolistGroup.GET("", todolistHandler.GetBulk)
-			todolistGroup.POST("", tx, todolistHandler.Create)
-			todolistGroup.PATCH("", tx, todolistHandler.PatchOneOrBulk)
-			todolistGroup.DELETE("", tx, todolistHandler.DeleteOneOrBulk)
+			todolistGroup.POST("", todolistHandler.Create)
+			todolistGroup.PATCH("", todolistHandler.PatchOneOrBulk)
+			todolistGroup.DELETE("", todolistHandler.DeleteOneOrBulk)
 
 			todolistGroup.GET("/:id", todolistHandler.GetOne)
-			todolistGroup.PATCH("/:id", tx, todolistHandler.PatchByID)
-			todolistGroup.DELETE("/:id", tx, todolistHandler.DeleteByID)
+			todolistGroup.PATCH("/:id", todolistHandler.PatchByID)
+			todolistGroup.DELETE("/:id", todolistHandler.DeleteByID)
 		}
 
 		todoGroup := protected.Group("/todo")
 		{
 			todoGroup.GET("", todoHandler.GetBulk)
-			todoGroup.POST("", tx, todoHandler.Create)
-			todoGroup.PATCH("", tx, todoHandler.PatchOneOrBulk)
-			todoGroup.DELETE("", tx, todoHandler.DeleteOneOrBulk)
+			todoGroup.POST("", todoHandler.Create)
+			todoGroup.PATCH("", todoHandler.PatchOneOrBulk)
+			todoGroup.DELETE("", todoHandler.DeleteOneOrBulk)
 
 			todoGroup.GET("/:id", todoHandler.GetOne)
-			todoGroup.PATCH("/:id", tx, todoHandler.PatchByID)
-			todoGroup.DELETE("/:id", tx, todoHandler.DeleteByID)
+			todoGroup.PATCH("/:id", todoHandler.PatchByID)
+			todoGroup.DELETE("/:id", todoHandler.DeleteByID)
 		}
 	}
 }

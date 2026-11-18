@@ -3,19 +3,51 @@ package infra
 import (
 	"context"
 	"log"
+	"time"
 
 	"github.com/glebarez/sqlite"
+	"github.com/google/uuid"
 	"go-gin-todo/internal/app"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
 type txKey struct{}
+type txIDKey struct{}
+
+// txSQLiteLogger logs SQL queries prefixed with the active transaction UUID from ctx.
+type txSQLiteLogger struct{}
+
+func (l *txSQLiteLogger) LogMode(level logger.LogLevel) logger.Interface {
+	return l
+}
+
+func (l *txSQLiteLogger) Info(_ context.Context, msg string, data ...interface{}) {
+	log.Printf(msg, data...)
+}
+
+func (l *txSQLiteLogger) Warn(_ context.Context, msg string, data ...interface{}) {
+	log.Printf(msg, data...)
+}
+
+func (l *txSQLiteLogger) Error(_ context.Context, msg string, data ...interface{}) {
+	log.Printf(msg, data...)
+}
+
+func (l *txSQLiteLogger) Trace(ctx context.Context, _ time.Time, fc func() (string, int64), _ error) {
+	sqlStr, _ := fc()
+	txID, _ := ctx.Value(txIDKey{}).(string)
+	if txID == "" {
+		txID = "default"
+	}
+	log.Printf("Executing (%s): %s;", txID, sqlStr)
+}
 
 // NewSQLiteDatabase opens a SQLite connection and auto-migrates application models.
 func NewSQLiteDatabase(dbPath string) (*gorm.DB, error) {
 	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
+		SkipDefaultTransaction: true,
+		Logger:                 &txSQLiteLogger{},
 	})
 	if err != nil {
 		log.Printf("Failed to open SQLite database: %v\n", err)
@@ -60,8 +92,38 @@ func (d *Database) ExecInTransaction(ctx context.Context, fn func(ctx context.Co
 	if tx, ok := ctx.Value(txKey{}).(*gorm.DB); ok && tx != nil {
 		return fn(ctx)
 	}
-	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		txCtx := context.WithValue(ctx, txKey{}, tx)
-		return fn(txCtx)
-	})
+
+	txID := uuid.NewString()
+	log.Printf("Executing (%s): BEGIN DEFERRED TRANSACTION;", txID)
+
+	tx := d.db.WithContext(ctx).Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
+
+	txCtx := context.WithValue(ctx, txKey{}, tx)
+	txCtx = context.WithValue(txCtx, txIDKey{}, txID)
+
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+			log.Printf("Executing (%s): ROLLBACK;", txID)
+			panic(r)
+		}
+	}()
+
+	if err := fn(txCtx); err != nil {
+		tx.Rollback()
+		log.Printf("Executing (%s): ROLLBACK;", txID)
+		return err
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
+		log.Printf("Executing (%s): ROLLBACK;", txID)
+		return err
+	}
+
+	log.Printf("Executing (%s): COMMIT;", txID)
+	return nil
 }

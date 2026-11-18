@@ -96,16 +96,11 @@ func TestIntegration_TodolistQueriesAndTransactionRollback(t *testing.T) {
 		t.Fatalf("expected 2 matching Project items for user 1, got %d", len(filtered))
 	}
 
-	// Real DB transaction rollback test (and Propagation.Required) via Transactor + TodolistCommands
-	commands := app.NewTodolistCommands(listRepo)
-	err = dbAdapter.ExecInTransaction(ctx, func(txCtx context.Context) error {
-		return dbAdapter.ExecInTransaction(txCtx, func(nestedCtx context.Context) error {
-			_, err := commands.UpdateBulk(nestedCtx, 1, []app.Todolist{
-				{ID: filtered[0].ID, Title: "Mutated Then Rolled Back"},
-				{ID: 99999, Title: "Nonexistent"},
-			})
-			return err
-		})
+	// Real DB transaction rollback test via TodolistCommands.UpdateBulk (uses RunInTx)
+	commands := app.NewTodolistCommands(listRepo, dbAdapter)
+	_, err = commands.UpdateBulk(ctx, 1, []app.Todolist{
+		{ID: filtered[0].ID, Title: "Mutated Then Rolled Back"},
+		{ID: 99999, Title: "Nonexistent"},
 	})
 	if !errors.Is(err, app.ErrNotFound) {
 		t.Fatalf("expected ErrNotFound, got %v", err)

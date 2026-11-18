@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-
-	"gorm.io/gorm/clause"
 )
 
 // TodolistQueries handles read operations for Todolists.
@@ -38,23 +36,19 @@ func (q *TodolistQueries) GetBulk(ctx context.Context, userID uint, search strin
 		limit = 10
 	}
 
-	query := q.q.DB(ctx).Model(&Todolist{}).Where(&Todolist{UserID: userID})
-
+	base := q.q.DB(ctx).Model(&Todolist{}).Where("user_id = ?", userID)
 	if search != "" {
-		query = query.Clauses(clause.Like{Column: "title", Value: "%" + search + "%"})
+		base = base.Where("title LIKE ?", "%"+search+"%")
 	}
 
 	var total int64
-	if err := query.Count(&total).Error; err != nil {
+	if err := base.Count(&total).Error; err != nil {
 		return nil, Pagination{}, err
 	}
 
 	offset := (page - 1) * limit
 	var items []Todolist
-	if err := query.Order(clause.OrderByColumn{Column: clause.Column{Name: "id"}, Desc: true}).
-		Limit(limit).
-		Offset(offset).
-		Find(&items).Error; err != nil {
+	if err := base.Order("id DESC").Limit(limit).Offset(offset).Find(&items).Error; err != nil {
 		return nil, Pagination{}, err
 	}
 

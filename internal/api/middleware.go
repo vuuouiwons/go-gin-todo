@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -9,8 +8,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"go-gin-todo/internal/app"
 )
-
-var errTransactionRollback = errors.New("rollback transaction due to HTTP error response")
 
 const (
 	ContextUserIDKey    = "userID"
@@ -63,28 +60,6 @@ func GetUserID(c *gin.Context) (uint, error) {
 	}
 
 	return userID, nil
-}
-
-// TransactionMiddleware wraps mutating HTTP requests in an atomic database transaction
-// via context propagation (similar to NestJS's @Transactional() CLS decorator).
-// Commits on status < 400 with no Gin errors; rolls back on status >= 400, errors, or panic.
-func TransactionMiddleware(transactor app.Transactor) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		origReq := c.Request
-		err := transactor.ExecInTransaction(origReq.Context(), func(txCtx context.Context) error {
-			c.Request = origReq.WithContext(txCtx)
-			c.Next()
-
-			if c.Writer.Status() >= http.StatusBadRequest || len(c.Errors) > 0 {
-				return errTransactionRollback
-			}
-			return nil
-		})
-		c.Request = origReq
-		if err != nil && !errors.Is(err, errTransactionRollback) && !c.Writer.Written() {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Transaction failed"})
-		}
-	}
 }
 
 // CORSMiddleware configures permissive CORS headers for API access.

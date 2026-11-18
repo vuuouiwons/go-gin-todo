@@ -13,17 +13,19 @@ import (
 )
 
 const (
-	defaultPage  = 1
-	defaultLimit = 10
+	defaultPage     = 1
+	defaultPageStr  = "1"
+	defaultLimit    = 10
+	defaultLimitStr = "10"
 )
 
 func parsePagination(c *gin.Context) (int, int) {
-	page, err := strconv.Atoi(c.DefaultQuery("page", strconv.Itoa(defaultPage)))
+	page, err := strconv.Atoi(c.DefaultQuery("page", defaultPageStr))
 	if err != nil || page <= 0 {
 		page = defaultPage
 	}
 
-	limit, err := strconv.Atoi(c.DefaultQuery("limit", strconv.Itoa(defaultLimit)))
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", defaultLimitStr))
 	if err != nil || limit <= 0 {
 		limit = defaultLimit
 	}
