@@ -1,29 +1,26 @@
-package api
+package routes
 
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
-	"go-gin-todo/internal/app"
+	"go-gin-todo/src/db"
+	"go-gin-todo/src/services"
+	"go-gin-todo/src/utils"
 )
 
 // TodolistHandler handles HTTP requests for Todolist resources.
 type TodolistHandler struct {
-	commands *app.TodolistCommands
-	queries  *app.TodolistQueries
+	service *services.TodolistService
 }
 
-// NewTodolistHandler constructs a TodolistHandler backed by TodolistCommands and TodolistQueries.
-func NewTodolistHandler(commands *app.TodolistCommands, queries *app.TodolistQueries) *TodolistHandler {
-	return &TodolistHandler{
-		commands: commands,
-		queries:  queries,
-	}
+// NewTodolistHandler constructs a new TodolistHandler.
+func NewTodolistHandler(service *services.TodolistService) *TodolistHandler {
+	return &TodolistHandler{service: service}
 }
 
-// GetBulk handles GET /todolist with pagination.
+// GetBulk handles GET /todolist.
 func (h *TodolistHandler) GetBulk(c *gin.Context) {
 	userID, err := GetUserID(c)
 	if err != nil {
@@ -32,16 +29,16 @@ func (h *TodolistHandler) GetBulk(c *gin.Context) {
 	}
 
 	search := c.Query("search")
-	page, limit := parsePagination(c)
+	page, limit := utils.ParsePagination(c)
 
-	todolists, pagination, err := h.queries.GetBulk(c.Request.Context(), userID, search, page, limit)
+	items, pagination, err := h.service.GetBulk(c.Request.Context(), userID, search, page, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch todolists"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"data":       ToTodolistResponseList(todolists),
+		"data":       ToTodolistResponseList(items),
 		"pagination": ToPaginationResponse(pagination),
 	})
 }
@@ -59,16 +56,16 @@ func (h *TodolistHandler) GetOne(c *gin.Context) {
 		return
 	}
 
-	todolist, err := h.queries.GetByID(c.Request.Context(), id, userID)
+	item, err := h.service.GetByID(c.Request.Context(), id, userID)
 	if err != nil {
 		respondDomainError(c, err, "Todolist not found", "", "Failed to fetch todolist")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": ToTodolistResponse(todolist)})
+	c.JSON(http.StatusOK, gin.H{"data": ToTodolistResponse(item)})
 }
 
-// Create handles POST /todolist (one or bulk).
+// Create handles POST /todolist (single or bulk).
 func (h *TodolistHandler) Create(c *gin.Context) {
 	userID, err := GetUserID(c)
 	if err != nil {
@@ -105,7 +102,7 @@ func (h *TodolistHandler) Create(c *gin.Context) {
 		return
 	}
 
-	created, err := h.commands.CreateOne(c.Request.Context(), userID, wrapped.Title)
+	created, err := h.service.CreateOne(c.Request.Context(), userID, wrapped.Title)
 	if err != nil {
 		respondDomainError(c, err, "", "Field 'title' is required", "Failed to create todolist")
 		return
@@ -123,7 +120,7 @@ func (h *TodolistHandler) createBulkResponse(c *gin.Context, userID uint, inputs
 		titles = append(titles, item.Title)
 	}
 
-	created, err := h.commands.CreateBulk(c.Request.Context(), userID, titles)
+	created, err := h.service.CreateBulk(c.Request.Context(), userID, titles)
 	if err != nil {
 		respondDomainError(c, err, "", "Title cannot be empty for any item", "Failed to create todolists")
 		return
@@ -136,7 +133,7 @@ func (h *TodolistHandler) createBulkResponse(c *gin.Context, userID uint, inputs
 	})
 }
 
-// PatchOneOrBulk handles PATCH /todolist (one or bulk).
+// PatchOneOrBulk handles PATCH /todolist (single or bulk).
 func (h *TodolistHandler) PatchOneOrBulk(c *gin.Context) {
 	userID, err := GetUserID(c)
 	if err != nil {
@@ -186,15 +183,15 @@ func (h *TodolistHandler) PatchOneOrBulk(c *gin.Context) {
 		return
 	}
 
-	domainUpdates := make([]app.Todolist, 0, len(itemsToUpdate))
-	for _, item := range itemsToUpdate {
-		domainUpdates = append(domainUpdates, app.Todolist{
+	updates := make([]db.Todolist, len(itemsToUpdate))
+	for i, item := range itemsToUpdate {
+		updates[i] = db.Todolist{
 			ID:    item.ID,
-			Title: strings.TrimSpace(item.Title),
-		})
+			Title: item.Title,
+		}
 	}
 
-	updated, err := h.commands.UpdateBulk(c.Request.Context(), userID, domainUpdates)
+	updated, err := h.service.UpdateBulk(c.Request.Context(), userID, updates)
 	if err != nil {
 		respondDomainError(c, err, "One or more todolists not found or unauthorized", "Valid 'id' and 'title' are required for each item", "Failed to update todolists")
 		return
@@ -228,13 +225,13 @@ func (h *TodolistHandler) PatchByID(c *gin.Context) {
 		return
 	}
 
-	var req CreateTodolistRequest
+	var req UpdateTodolistRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body: " + err.Error()})
 		return
 	}
 
-	updated, err := h.commands.UpdateByID(c.Request.Context(), id, userID, req.Title)
+	updated, err := h.service.UpdateByID(c.Request.Context(), id, userID, req.Title)
 	if err != nil {
 		respondDomainError(c, err, "Todolist not found", "Field 'title' cannot be empty", "Failed to update todolist")
 		return
@@ -246,7 +243,7 @@ func (h *TodolistHandler) PatchByID(c *gin.Context) {
 	})
 }
 
-// DeleteOneOrBulk handles DELETE /todolist strictly from request body IDs.
+// DeleteOneOrBulk handles DELETE /todolist (single or bulk via body).
 func (h *TodolistHandler) DeleteOneOrBulk(c *gin.Context) {
 	userID, err := GetUserID(c)
 	if err != nil {
@@ -254,21 +251,46 @@ func (h *TodolistHandler) DeleteOneOrBulk(c *gin.Context) {
 		return
 	}
 
-	idsToDelete, ok := parseDeleteIDs(c)
+	trimmed, ok := readTrimmedBody(c, "Request body is required for deletion")
 	if !ok {
 		return
 	}
 
-	deletedCount, err := h.commands.DeleteBulk(c.Request.Context(), idsToDelete, userID)
+	var idsToDelete []uint
+
+	if trimmed[0] == '[' {
+		if err := json.Unmarshal(trimmed, &idsToDelete); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON array format: " + err.Error()})
+			return
+		}
+	} else {
+		var req DeleteBulkRequest
+		if err := json.Unmarshal(trimmed, &req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body: " + err.Error()})
+			return
+		}
+
+		if len(req.IDs) > 0 {
+			idsToDelete = req.IDs
+		} else if req.ID > 0 {
+			idsToDelete = []uint{req.ID}
+		}
+	}
+
+	if len(idsToDelete) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No ID or IDs provided for deletion"})
+		return
+	}
+
+	deletedCount, err := h.service.DeleteBulk(c.Request.Context(), idsToDelete, userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete todolists"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete todolist(s)"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":      "Todolist(s) deleted successfully",
 		"deletedCount": deletedCount,
-		"requestedIDs": idsToDelete,
 	})
 }
 
@@ -285,19 +307,16 @@ func (h *TodolistHandler) DeleteByID(c *gin.Context) {
 		return
 	}
 
-	deletedCount, err := h.commands.DeleteByID(c.Request.Context(), id, userID)
+	rowsAffected, err := h.service.DeleteByID(c.Request.Context(), id, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete todolist"})
 		return
 	}
 
-	if deletedCount == 0 {
+	if rowsAffected == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Todolist not found"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Todolist deleted successfully",
-		"id":      id,
-	})
+	c.JSON(http.StatusOK, gin.H{"message": "Todolist deleted successfully"})
 }

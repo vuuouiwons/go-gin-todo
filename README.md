@@ -1,51 +1,48 @@
-# Go Gin Todo Backend Server (Pragmatic Layered Architecture)
+# Go Gin Todo Backend Server (Pragmatic 3-Layer Architecture)
 
-A pragmatic, low-overhead RESTful backend API built with Go and the [Gin Web Framework](https://github.com/gin-gonic/gin), structured according to the **Pragmatic Layered Architecture** defined in [AGENTS.md](file:///d:/IT-projects/go-gin-todo/AGENTS.md).
+A pragmatic, low-overhead RESTful backend API built with Go and the [Gin Web Framework](https://github.com/gin-gonic/gin), structured according to the **Pragmatic 3-Layer Architecture** defined in [AGENTS.md](file:///d:/IT-projects/go-gin-todo/AGENTS.md).
 
-It features JWT authentication, bcrypt password hashing, pure-Go SQLite persistence with GORM (no CGO required), URI versioning (`v1` as default), lightweight CQRS (`Commands` & `Queries`), and full single/bulk CRUD capabilities for Todolists and Todos.
+It features JWT authentication, bcrypt password hashing, pure-Go SQLite persistence with GORM (no CGO required), URI versioning (`v1` as default), direct ORM data access, idiomatic GORM transaction handling, and full single/bulk CRUD capabilities for Todolists and Todos.
 
 ---
 
-## Pragmatic Layered Architecture
+## Pragmatic 3-Layer Architecture
 
-Dependencies flow strictly **inward** toward the `Application` core (`API` → `Application` ← `Infrastructure`), with no `API` ↔ `Infrastructure` cross-imports:
+**Data & Dependency Flow:**
+`Inbound Interface (HTTP)` ➔ `Controllers / Handlers (src/routes)` ➔ `Services (src/services)` ➔ `Data Access (src/db)`
 
 ```text
 go-gin-todo/
 ├── docs/
 │   ├── docs.go                                   # Embedded OpenAPI specification (//go:embed)
 │   └── openapi.json                              # OpenAPI 3.0 specification
-├── internal/
-│   ├── app/                                      # 1. Application Layer (Core)
-│   │   ├── models.go                             # Core models (User, Todolist, Todo, Pagination) & errors
-│   │   ├── interfaces.go                         # Repository, Transactor (+ RunInTx), Queryer, Hasher, Token
-│   │   ├── auth_command.go                       # Register & Login commands
-│   │   ├── todolist_command.go                   # Todolist write commands & RunInTx orchestration
-│   │   ├── todolist_query.go                     # Todolist reads (direct paginated Queryer + GetByID)
-│   │   ├── todo_command.go                       # Todo write commands & RunInTx orchestration
-│   │   ├── todo_query.go                         # Todo reads (direct paginated Queryer + GetByID)
-│   │   └── commands_test.go                      # Fast in-memory Unit Tests for Commands
-│   │
-│   ├── infra/                                    # 2. Infrastructure Layer (Thin ACL)
-│   │   ├── database.go                           # SQLite connection, migrations, Transactor & Queryer
-│   │   ├── user_repo.go                          # GORM UserRepository (reuses app.User)
-│   │   ├── todolist_repo.go                      # GORM TodolistRepository (reuses app.Todolist)
-│   │   ├── todo_repo.go                          # GORM TodoRepository (reuses app.Todo)
-│   │   └── security.go                           # BcryptHasher & JWTTokenManager
-│   │
-│   ├── api/                                      # 3. API Layer (HTTP Delivery & Security Boundary)
-│   │   ├── dto.go                                # Request/Response DTOs & explicit mappers
-│   │   ├── middleware.go                         # AuthMiddleware & CORSMiddleware
+├── src/
+│   ├── routes/                                   # 1. Routes & Handlers (Transport & Response Shaping)
+│   │   ├── dto.go                                # Request & Response DTOs (Boundary Security)
 │   │   ├── helpers.go                            # Pagination, ID/body parsing, error mapping
-│   │   ├── auth_handler.go                       # Auth HTTP handlers
-│   │   ├── todolist_handler.go                   # Todolist HTTP handlers
-│   │   ├── todo_handler.go                       # Todo HTTP handlers
+│   │   ├── middleware.go                         # AuthMiddleware & CORSMiddleware
+│   │   ├── handlers_auth.go                      # Auth HTTP handlers (Register & Login)
+│   │   ├── handlers_todolist.go                  # Todolist HTTP handlers (CRUD & bulk)
+│   │   ├── handlers_todo.go                      # Todo HTTP handlers (CRUD & bulk)
 │   │   └── router.go                             # Route definitions & URI versioning
 │   │
-│   └── config/                                   # Environment & .env configuration loader
-│       └── config.go
+│   ├── services/                                 # 2. Services (Business Logic & Transactions)
+│   │   ├── auth_service.go                       # Registration, password hashing, JWT issuing
+│   │   ├── todolist_service.go                   # Todolist business rules & GORM transactions
+│   │   ├── todo_service.go                       # Todo business rules & GORM transactions
+│   │   └── services_test.go                      # Unit tests for business logic & transaction rollbacks
+│   │
+│   ├── db/                                       # 3. Data Access (GORM Connection & Models)
+│   │   ├── connection.go                         # SQLite connection & auto-migrations
+│   │   └── models.go                             # GORM schema models (User, Todolist, Todo, Pagination)
+│   │
+│   └── utils/                                    # Stateless Helpers
+│       ├── auth.go                               # Bcrypt hashing & JWT token manager
+│       ├── errors.go                             # Shared application domain errors
+│       ├── pagination.go                         # Pagination helpers & calculation
+│       └── config.go                             # Environment configuration loader
 ├── tests/
-│   ├── integration_test.go                       # Isolated DB tests for Queries, Repos, & Transactions
+│   ├── integration_test.go                       # Isolated DB tests for queries & transactions
 │   └── api_test.go                               # HTTP E2E tests across all endpoints
 ├── .dockerignore
 ├── .env.example

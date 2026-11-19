@@ -11,10 +11,10 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"go-gin-todo/internal/api"
-	"go-gin-todo/internal/app"
-	"go-gin-todo/internal/config"
-	"go-gin-todo/internal/infra"
+	"go-gin-todo/src/db"
+	"go-gin-todo/src/routes"
+	"go-gin-todo/src/services"
+	"go-gin-todo/src/utils"
 	"gorm.io/gorm"
 )
 
@@ -29,7 +29,7 @@ func TestMain(m *testing.M) {
 	testDBPath := "test_e2e_todo.db"
 	_ = os.Remove(testDBPath)
 
-	cfg := &config.Config{
+	cfg := &utils.Config{
 		Port:              "8080",
 		JWTSecret:         "test-secret-key-12345",
 		JWTExpiresInHours: 2,
@@ -37,30 +37,21 @@ func TestMain(m *testing.M) {
 		GinMode:           "test",
 	}
 
-	db, err := infra.NewSQLiteDatabase(cfg.DBPath)
+	database, err := db.Connect(cfg.DBPath)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to connect to test database: %v", err))
 	}
-	testDB = db
+	testDB = database
 
-	dbAdapter := infra.NewDatabase(db)
-	userRepo := infra.NewUserRepository(db)
-	todolistRepo := infra.NewTodolistRepository(db)
-	todoRepo := infra.NewTodoRepository(db)
-	hasher := infra.NewBcryptHasher(0)
-	tokenManager := infra.NewJWTTokenManager(cfg.JWTSecret, cfg.JWTExpiresInHours)
+	authService := services.NewAuthService(database, cfg.JWTSecret, cfg.JWTExpiresInHours)
+	todolistService := services.NewTodolistService(database)
+	todoService := services.NewTodoService(database)
 
-	authHandler := api.NewAuthHandler(app.NewAuthCommands(userRepo, hasher, tokenManager, dbAdapter))
-	todolistHandler := api.NewTodolistHandler(
-		app.NewTodolistCommands(todolistRepo, dbAdapter),
-		app.NewTodolistQueries(dbAdapter, todolistRepo),
-	)
-	todoHandler := api.NewTodoHandler(
-		app.NewTodoCommands(todoRepo, dbAdapter),
-		app.NewTodoQueries(dbAdapter, todoRepo),
-	)
+	authHandler := routes.NewAuthHandler(authService)
+	todolistHandler := routes.NewTodolistHandler(todolistService)
+	todoHandler := routes.NewTodoHandler(todoService)
 
-	testRouter = api.SetupRouter(cfg.GinMode, tokenManager, authHandler, todolistHandler, todoHandler)
+	testRouter = routes.SetupRouter(cfg.GinMode, cfg.JWTSecret, authHandler, todolistHandler, todoHandler)
 
 	code := m.Run()
 
@@ -473,7 +464,7 @@ func TestUserDataIsolation(t *testing.T) {
 		t.Errorf("Expected 404 for User B deleting User A's todo, got %d", wDelB.Code)
 	}
 
-	// Verify RunInTx transaction rollback over HTTP:
+	// Verify transaction rollback over HTTP:
 	// User B creates a list, then User A sends a bulk PATCH modifying both User A's list and User B's list.
 	// Expect 404 Not Found AND User A's list must remain "Secret List A".
 	wListB := performRequest(testRouter, "POST", "/api/v1/todolist", []byte(`{"title":"Secret List B"}`), tokenB)
@@ -504,7 +495,7 @@ func TestUserDataIsolation(t *testing.T) {
 	}
 	_ = json.Unmarshal(wVerifyA.Body.Bytes(), &verifyResp)
 	if verifyResp.Data.Title != "Secret List A" {
-		t.Errorf("Expected RunInTx rollback to preserve User A's title 'Secret List A', got %q", verifyResp.Data.Title)
+		t.Errorf("Expected transaction rollback to preserve User A's title 'Secret List A', got %q", verifyResp.Data.Title)
 	}
 }
 

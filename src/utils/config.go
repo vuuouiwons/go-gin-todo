@@ -1,4 +1,4 @@
-package config
+package utils
 
 import (
 	"log"
@@ -8,6 +8,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// Config encapsulates runtime application configurations.
 type Config struct {
 	Port              string
 	JWTSecret         string
@@ -16,6 +17,7 @@ type Config struct {
 	GinMode           string
 }
 
+// LoadConfig reads configuration from .env and environment variables.
 func LoadConfig() *Config {
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found, reading from system environment variables")

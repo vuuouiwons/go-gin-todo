@@ -10,7 +10,7 @@ RUN go mod download
 # Copy application source and embedded OpenAPI docs
 COPY main.go ./
 COPY docs ./docs
-COPY internal ./internal
+COPY src ./src
 
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/server .
 
@@ -35,9 +35,6 @@ USER appuser
 
 VOLUME ["/data"]
 EXPOSE 8080
-
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -fsS http://127.0.0.1:${PORT}/api/v1/health || exit 1
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -fsS http://127.0.0.1:${PORT}/api/v1/health || exit 1

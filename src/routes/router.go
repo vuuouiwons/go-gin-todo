@@ -1,4 +1,4 @@
-package api
+package routes
 
 import (
 	"net/http"
@@ -6,13 +6,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go-gin-todo/docs"
-	"go-gin-todo/internal/app"
 )
 
 // SetupRouter initializes the Gin engine, middlewares, documentation, and versioned API routes.
 func SetupRouter(
 	ginMode string,
-	tokenManager app.TokenManager,
+	jwtSecret string,
 	authHandler *AuthHandler,
 	todolistHandler *TodolistHandler,
 	todoHandler *TodoHandler,
@@ -26,7 +25,7 @@ func SetupRouter(
 
 	router.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
-			"message":        "Pragmatic Layered Architecture Go Gin Todo Server",
+			"message":        "Pragmatic 3-Layer Architecture Go Gin Todo Server",
 			"prefix":         "/api",
 			"defaultVersion": "v1",
 			"docs":           "/docs",
@@ -72,7 +71,7 @@ func SetupRouter(
 	})
 
 	v1Group := apiGroup.Group("/v1")
-	registerRoutes(v1Group, tokenManager, authHandler, todolistHandler, todoHandler)
+	registerRoutes(v1Group, jwtSecret, authHandler, todolistHandler, todoHandler)
 
 	// Transparently route unversioned /api/* requests to default version /api/v1/*
 	router.NoRoute(func(c *gin.Context) {
@@ -90,7 +89,7 @@ func SetupRouter(
 
 func registerRoutes(
 	rg *gin.RouterGroup,
-	tokenManager app.TokenManager,
+	jwtSecret string,
 	authHandler *AuthHandler,
 	todolistHandler *TodolistHandler,
 	todoHandler *TodoHandler,
@@ -103,7 +102,7 @@ func registerRoutes(
 	rg.POST("/login", authHandler.Login)
 
 	protected := rg.Group("")
-	protected.Use(AuthMiddleware(tokenManager))
+	protected.Use(AuthMiddleware(jwtSecret))
 	{
 		todolistGroup := protected.Group("/todolist")
 		{

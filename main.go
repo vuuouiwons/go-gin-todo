@@ -10,46 +10,36 @@ import (
 	"syscall"
 	"time"
 
-	"go-gin-todo/internal/api"
-	"go-gin-todo/internal/app"
-	"go-gin-todo/internal/config"
-	"go-gin-todo/internal/infra"
+	"go-gin-todo/src/db"
+	"go-gin-todo/src/routes"
+	"go-gin-todo/src/services"
+	"go-gin-todo/src/utils"
 )
 
 func main() {
-	cfg := config.LoadConfig()
+	cfg := utils.LoadConfig()
 
-	db, err := infra.NewSQLiteDatabase(cfg.DBPath)
+	database, err := db.Connect(cfg.DBPath)
 	if err != nil {
 		log.Fatalf("Fatal: Database initialization failed: %v", err)
 	}
 
-	sqlDB, err := db.DB()
+	sqlDB, err := database.DB()
 	if err == nil {
 		defer sqlDB.Close()
 	}
 
-	// 1. Infrastructure layer (ACL adapters)
-	dbAdapter := infra.NewDatabase(db)
-	userRepo := infra.NewUserRepository(db)
-	todolistRepo := infra.NewTodolistRepository(db)
-	todoRepo := infra.NewTodoRepository(db)
-	hasher := infra.NewBcryptHasher(0)
-	tokenManager := infra.NewJWTTokenManager(cfg.JWTSecret, cfg.JWTExpiresInHours)
+	// 1. Services layer (Business logic & database transactions)
+	authService := services.NewAuthService(database, cfg.JWTSecret, cfg.JWTExpiresInHours)
+	todolistService := services.NewTodolistService(database)
+	todoService := services.NewTodoService(database)
 
-	// 2. Application layer (Commands & Queries)
-	authCommands := app.NewAuthCommands(userRepo, hasher, tokenManager, dbAdapter)
-	todolistCommands := app.NewTodolistCommands(todolistRepo, dbAdapter)
-	todolistQueries := app.NewTodolistQueries(dbAdapter, todolistRepo)
-	todoCommands := app.NewTodoCommands(todoRepo, dbAdapter)
-	todoQueries := app.NewTodoQueries(dbAdapter, todoRepo)
+	// 2. Routes layer (Handlers & Router)
+	authHandler := routes.NewAuthHandler(authService)
+	todolistHandler := routes.NewTodolistHandler(todolistService)
+	todoHandler := routes.NewTodoHandler(todoService)
 
-	// 3. API layer (Handlers & Router)
-	authHandler := api.NewAuthHandler(authCommands)
-	todolistHandler := api.NewTodolistHandler(todolistCommands, todolistQueries)
-	todoHandler := api.NewTodoHandler(todoCommands, todoQueries)
-
-	router := api.SetupRouter(cfg.GinMode, tokenManager, authHandler, todolistHandler, todoHandler)
+	router := routes.SetupRouter(cfg.GinMode, cfg.JWTSecret, authHandler, todolistHandler, todoHandler)
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.Port,
