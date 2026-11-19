@@ -271,8 +271,22 @@ func TestTodolistCRUD(t *testing.T) {
 		t.Fatalf("PATCH bulk todolist failed: %s", wPatchBulk.Body.String())
 	}
 
-	// DELETE (single via body on /todolist):
-	deleteSingleBody := fmt.Sprintf(`{"id":%d}`, singleID)
+	// DELETE alias rejections: only {"ids": [...]} is allowed, no aliases!
+	wRejectAliasID := performRequest(testRouter, "DELETE", "/api/v1/todolist", []byte(fmt.Sprintf(`{"id":%d}`, singleID)), token)
+	if wRejectAliasID.Code != http.StatusBadRequest {
+		t.Fatalf("Expected 400 Bad Request for alias {'id':...}, got %d: %s", wRejectAliasID.Code, wRejectAliasID.Body.String())
+	}
+	wRejectAliasArray := performRequest(testRouter, "DELETE", "/api/v1/todolist", []byte(fmt.Sprintf(`[%d]`, singleID)), token)
+	if wRejectAliasArray.Code != http.StatusBadRequest {
+		t.Fatalf("Expected 400 Bad Request for alias raw array [...], got %d: %s", wRejectAliasArray.Code, wRejectAliasArray.Body.String())
+	}
+	wRejectEmptyIDs := performRequest(testRouter, "DELETE", "/api/v1/todolist", []byte(`{"ids":[]}`), token)
+	if wRejectEmptyIDs.Code != http.StatusBadRequest {
+		t.Fatalf("Expected 400 Bad Request for empty 'ids', got %d: %s", wRejectEmptyIDs.Code, wRejectEmptyIDs.Body.String())
+	}
+
+	// DELETE (single via body on /todolist strictly using {"ids": [singleID]}):
+	deleteSingleBody := fmt.Sprintf(`{"ids":[%d]}`, singleID)
 	wDeleteOne := performRequest(testRouter, "DELETE", "/api/v1/todolist", []byte(deleteSingleBody), token)
 	if wDeleteOne.Code != http.StatusOK {
 		t.Fatalf("DELETE one todolist via body failed: %s", wDeleteOne.Body.String())
@@ -284,7 +298,7 @@ func TestTodolistCRUD(t *testing.T) {
 		t.Fatalf("Expected 400 Bad Request when DELETE /todolist has no body, got %d", wDeleteNoBody.Code)
 	}
 
-	// DELETE (bulk via body on /todolist):
+	// DELETE (bulk via body on /todolist strictly using {"ids": [bulkID1, bulkID2]}):
 	deleteBulkBody := fmt.Sprintf(`{"ids":[%d,%d]}`, bulkID1, bulkID2)
 	wDeleteBulk := performRequest(testRouter, "DELETE", "/api/v1/todolist", []byte(deleteBulkBody), token)
 	if wDeleteBulk.Code != http.StatusOK {
@@ -388,8 +402,22 @@ func TestTodoCRUD(t *testing.T) {
 		t.Fatalf("PATCH bulk todo failed: %s", wPatchBulk.Body.String())
 	}
 
-	// DELETE (single via body on /todo):
-	deleteSingleBody := fmt.Sprintf(`{"id":%d}`, singleID)
+	// DELETE alias rejections: only {"ids": [...]} is allowed, no aliases!
+	wRejectAliasID := performRequest(testRouter, "DELETE", "/api/v1/todo", []byte(fmt.Sprintf(`{"id":%d}`, singleID)), token)
+	if wRejectAliasID.Code != http.StatusBadRequest {
+		t.Fatalf("Expected 400 Bad Request for alias {'id':...}, got %d: %s", wRejectAliasID.Code, wRejectAliasID.Body.String())
+	}
+	wRejectAliasArray := performRequest(testRouter, "DELETE", "/api/v1/todo", []byte(fmt.Sprintf(`[%d]`, singleID)), token)
+	if wRejectAliasArray.Code != http.StatusBadRequest {
+		t.Fatalf("Expected 400 Bad Request for alias raw array [...], got %d: %s", wRejectAliasArray.Code, wRejectAliasArray.Body.String())
+	}
+	wRejectEmptyIDs := performRequest(testRouter, "DELETE", "/api/v1/todo", []byte(`{"ids":[]}`), token)
+	if wRejectEmptyIDs.Code != http.StatusBadRequest {
+		t.Fatalf("Expected 400 Bad Request for empty 'ids', got %d: %s", wRejectEmptyIDs.Code, wRejectEmptyIDs.Body.String())
+	}
+
+	// DELETE (single via body on /todo strictly using {"ids": [singleID]}):
+	deleteSingleBody := fmt.Sprintf(`{"ids":[%d]}`, singleID)
 	wDeleteOne := performRequest(testRouter, "DELETE", "/api/v1/todo", []byte(deleteSingleBody), token)
 	if wDeleteOne.Code != http.StatusOK {
 		t.Fatalf("DELETE one todo via body failed: %s", wDeleteOne.Body.String())
@@ -401,8 +429,8 @@ func TestTodoCRUD(t *testing.T) {
 		t.Fatalf("Expected 400 Bad Request when DELETE /todo has no body, got %d", wDeleteNoBody.Code)
 	}
 
-	// DELETE (bulk via body on /todo):
-	deleteBulkBody := fmt.Sprintf(`[%d,%d]`, bulkID1, bulkID2)
+	// DELETE (bulk via body on /todo strictly using {"ids": [bulkID1, bulkID2]}):
+	deleteBulkBody := fmt.Sprintf(`{"ids":[%d,%d]}`, bulkID1, bulkID2)
 	wDeleteBulk := performRequest(testRouter, "DELETE", "/api/v1/todo", []byte(deleteBulkBody), token)
 	if wDeleteBulk.Code != http.StatusOK {
 		t.Fatalf("DELETE bulk todo via body failed: %s", wDeleteBulk.Body.String())
@@ -450,7 +478,7 @@ func TestUserDataIsolation(t *testing.T) {
 	}
 
 	// User B attempts to delete User A's todo via body -> should delete 0 rows
-	wDelBodyB := performRequest(testRouter, "DELETE", "/api/v1/todo", []byte(fmt.Sprintf(`{"id":%d}`, resTodoA.Data.ID)), tokenB)
+	wDelBodyB := performRequest(testRouter, "DELETE", "/api/v1/todo", []byte(fmt.Sprintf(`{"ids":[%d]}`, resTodoA.Data.ID)), tokenB)
 	if wDelBodyB.Code != http.StatusOK {
 		t.Errorf("Expected 200 for User B attempting delete on User A's todo, got %d", wDelBodyB.Code)
 	}

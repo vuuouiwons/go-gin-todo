@@ -39,10 +39,11 @@ type UpdateTodolistRequest struct {
 	Title string `json:"title"`
 }
 
-type DeleteBulkRequest struct {
-	ID  uint   `json:"id"`
-	IDs []uint `json:"ids"`
+type DeleteRequest struct {
+	IDs []uint `json:"ids" binding:"required"`
 }
+
+type DeleteBulkRequest = DeleteRequest
 
 // --- Outbound Response Payloads (Boundary Security) ---
 

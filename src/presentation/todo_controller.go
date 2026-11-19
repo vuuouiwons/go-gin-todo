@@ -270,8 +270,8 @@ func (h *TodoController) PatchByID(c *gin.Context) {
 	})
 }
 
-// DeleteOneOrBulk handles DELETE /todo (single or bulk via body).
-func (h *TodoController) DeleteOneOrBulk(c *gin.Context) {
+// Delete handles DELETE /todo strictly via body {"ids": [1, 2, 3]}.
+func (h *TodoController) Delete(c *gin.Context) {
 	userID, err := GetUserID(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -283,33 +283,25 @@ func (h *TodoController) DeleteOneOrBulk(c *gin.Context) {
 		return
 	}
 
-	var idsToDelete []uint
-
-	if trimmed[0] == '[' {
-		if err := json.Unmarshal(trimmed, &idsToDelete); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON array format: " + err.Error()})
-			return
-		}
-	} else {
-		var req DeleteBulkRequest
-		if err := json.Unmarshal(trimmed, &req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body: " + err.Error()})
-			return
-		}
-
-		if len(req.IDs) > 0 {
-			idsToDelete = req.IDs
-		} else if req.ID > 0 {
-			idsToDelete = []uint{req.ID}
-		}
-	}
-
-	if len(idsToDelete) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "No ID or IDs provided for deletion"})
+	var req DeleteRequest
+	if err := json.Unmarshal(trimmed, &req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body: " + err.Error()})
 		return
 	}
 
-	deletedCount, err := h.service.DeleteBulk(c.Request.Context(), idsToDelete, userID)
+	if len(req.IDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Field 'ids' is required and must contain at least one ID"})
+		return
+	}
+
+	for _, id := range req.IDs {
+		if id == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID in 'ids' list: IDs must be greater than 0"})
+			return
+		}
+	}
+
+	deletedCount, err := h.service.DeleteBulk(c.Request.Context(), req.IDs, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete todo(s)"})
 		return
@@ -319,6 +311,11 @@ func (h *TodoController) DeleteOneOrBulk(c *gin.Context) {
 		"message":      "Todo(s) deleted successfully",
 		"deletedCount": deletedCount,
 	})
+}
+
+// DeleteOneOrBulk handles DELETE /todo strictly via body {"ids": [1, 2, 3]}.
+func (h *TodoController) DeleteOneOrBulk(c *gin.Context) {
+	h.Delete(c)
 }
 
 // DeleteByID handles DELETE /todo/:id.

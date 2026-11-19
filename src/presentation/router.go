@@ -109,7 +109,7 @@ func registerRoutes(
 			todolistGroup.GET("", todolistController.GetBulk)
 			todolistGroup.POST("", todolistController.Create)
 			todolistGroup.PATCH("", todolistController.PatchOneOrBulk)
-			todolistGroup.DELETE("", todolistController.DeleteOneOrBulk)
+			todolistGroup.DELETE("", todolistController.Delete)
 
 			todolistGroup.GET("/:id", todolistController.GetOne)
 			todolistGroup.PATCH("/:id", todolistController.PatchByID)
@@ -121,7 +121,7 @@ func registerRoutes(
 			todoGroup.GET("", todoController.GetBulk)
 			todoGroup.POST("", todoController.Create)
 			todoGroup.PATCH("", todoController.PatchOneOrBulk)
-			todoGroup.DELETE("", todoController.DeleteOneOrBulk)
+			todoGroup.DELETE("", todoController.Delete)
 
 			todoGroup.GET("/:id", todoController.GetOne)
 			todoGroup.PATCH("/:id", todoController.PatchByID)
