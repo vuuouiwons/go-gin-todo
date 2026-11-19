@@ -1,4 +1,4 @@
-package routes
+package presentation
 
 import (
 	"bytes"
@@ -8,7 +8,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"go-gin-todo/src/utils"
+	"go-gin-todo/src/shared"
 )
 
 // readTrimmedBody reads the request body and returns trimmed bytes while preserving body for future reads.
@@ -42,7 +42,7 @@ func parseIDParam(c *gin.Context, resourceName string) (uint, bool) {
 
 // respondDomainError maps application errors to appropriate HTTP status codes.
 func respondDomainError(c *gin.Context, err error, notFoundMsg, badReqMsg, defaultMsg string) {
-	if errors.Is(err, utils.ErrNotFound) {
+	if errors.Is(err, shared.ErrNotFound) {
 		msg := notFoundMsg
 		if msg == "" {
 			msg = "Resource not found"
@@ -51,7 +51,7 @@ func respondDomainError(c *gin.Context, err error, notFoundMsg, badReqMsg, defau
 		return
 	}
 
-	if errors.Is(err, utils.ErrBadRequest) {
+	if errors.Is(err, shared.ErrBadRequest) {
 		msg := badReqMsg
 		if msg == "" {
 			msg = "Invalid request payload"
@@ -60,12 +60,12 @@ func respondDomainError(c *gin.Context, err error, notFoundMsg, badReqMsg, defau
 		return
 	}
 
-	if errors.Is(err, utils.ErrConflict) {
+	if errors.Is(err, shared.ErrConflict) {
 		c.JSON(http.StatusConflict, gin.H{"error": "Email already registered"})
 		return
 	}
 
-	if errors.Is(err, utils.ErrUnauthorized) {
+	if errors.Is(err, shared.ErrUnauthorized) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}

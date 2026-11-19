@@ -10,17 +10,16 @@ import (
 	"syscall"
 	"time"
 
-	"go-gin-todo/src/db"
-	"go-gin-todo/src/db/repository"
-	"go-gin-todo/src/routes"
-	"go-gin-todo/src/services"
-	"go-gin-todo/src/utils"
+	"go-gin-todo/src/business"
+	"go-gin-todo/src/data"
+	"go-gin-todo/src/presentation"
+	"go-gin-todo/src/shared"
 )
 
 func main() {
-	cfg := utils.LoadConfig()
+	cfg := shared.LoadConfig()
 
-	database, err := db.Connect(cfg.DBPath)
+	database, err := data.Connect(cfg.DBPath)
 	if err != nil {
 		log.Fatalf("Fatal: Database initialization failed: %v", err)
 	}
@@ -30,22 +29,22 @@ func main() {
 		defer sqlDB.Close()
 	}
 
-	// 1. Repositories in src/db/repository (reusable database queries)
-	userRepo := repository.NewUserRepository(database)
-	todolistRepo := repository.NewTodolistRepository(database)
-	todoRepo := repository.NewTodoRepository(database)
+	// 1. Data Access layer (Repositories)
+	userRepo := data.NewUserRepository(database)
+	todolistRepo := data.NewTodolistRepository(database)
+	todoRepo := data.NewTodoRepository(database)
 
-	// 2. Services layer (Business logic & database transactions)
-	authService := services.NewAuthService(userRepo, cfg.JWTSecret, cfg.JWTExpiresInHours)
-	todolistService := services.NewTodolistService(database, todolistRepo)
-	todoService := services.NewTodoService(database, todoRepo)
+	// 2. Business Logic layer (Services)
+	authService := business.NewAuthService(userRepo, cfg.JWTSecret, cfg.JWTExpiresInHours)
+	todolistService := business.NewTodolistService(todolistRepo)
+	todoService := business.NewTodoService(todoRepo)
 
-	// 3. Routes layer (Handlers & Router)
-	authHandler := routes.NewAuthHandler(authService)
-	todolistHandler := routes.NewTodolistHandler(todolistService)
-	todoHandler := routes.NewTodoHandler(todoService)
+	// 3. Presentation layer (Controllers & Router)
+	authController := presentation.NewAuthController(authService)
+	todolistController := presentation.NewTodolistController(todolistService)
+	todoController := presentation.NewTodoController(todoService)
 
-	router := routes.SetupRouter(cfg.GinMode, cfg.JWTSecret, authHandler, todolistHandler, todoHandler)
+	router := presentation.SetupRouter(cfg.GinMode, cfg.JWTSecret, authController, todolistController, todoController)
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.Port,

@@ -1,4 +1,4 @@
-package services
+package business_test
 
 import (
 	"context"
@@ -6,15 +6,15 @@ import (
 	"path/filepath"
 	"testing"
 
-	"go-gin-todo/src/db"
-	"go-gin-todo/src/db/repository"
-	"go-gin-todo/src/utils"
+	"go-gin-todo/src/business"
+	"go-gin-todo/src/data"
+	"go-gin-todo/src/shared"
 )
 
-func setupIsolatedServiceDB(t *testing.T) (*AuthService, *TodolistService, *TodoService) {
+func setupIsolatedServiceDB(t *testing.T) (*business.AuthService, *business.TodolistService, *business.TodoService) {
 	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "test_service.db")
-	database, err := db.Connect(dbPath)
+	database, err := data.Connect(dbPath)
 	if err != nil {
 		t.Fatalf("Failed to initialize test db: %v", err)
 	}
@@ -25,13 +25,13 @@ func setupIsolatedServiceDB(t *testing.T) (*AuthService, *TodolistService, *Todo
 		}
 	})
 
-	userRepo := repository.NewUserRepository(database)
-	todolistRepo := repository.NewTodolistRepository(database)
-	todoRepo := repository.NewTodoRepository(database)
+	userRepo := data.NewUserRepository(database)
+	todolistRepo := data.NewTodolistRepository(database)
+	todoRepo := data.NewTodoRepository(database)
 
-	authService := NewAuthService(userRepo, "test-secret-12345", 2)
-	todolistService := NewTodolistService(database, todolistRepo)
-	todoService := NewTodoService(database, todoRepo)
+	authService := business.NewAuthService(userRepo, "test-secret-12345", 2)
+	todolistService := business.NewTodolistService(todolistRepo)
+	todoService := business.NewTodoService(todoRepo)
 
 	return authService, todolistService, todoService
 }
@@ -51,13 +51,13 @@ func TestAuthService_RegisterAndLogin(t *testing.T) {
 
 	// Short password
 	_, err = authService.Register(ctx, "test2@example.com", "123")
-	if !errors.Is(err, utils.ErrBadRequest) {
+	if !errors.Is(err, shared.ErrBadRequest) {
 		t.Fatalf("Expected ErrBadRequest for short password, got: %v", err)
 	}
 
 	// Duplicate registration
 	_, err = authService.Register(ctx, "test@example.com", "secret123")
-	if !errors.Is(err, utils.ErrConflict) {
+	if !errors.Is(err, shared.ErrConflict) {
 		t.Fatalf("Expected ErrConflict for duplicate email, got: %v", err)
 	}
 
@@ -72,13 +72,13 @@ func TestAuthService_RegisterAndLogin(t *testing.T) {
 
 	// Invalid password login
 	_, _, err = authService.Login(ctx, "test@example.com", "wrongpass")
-	if !errors.Is(err, utils.ErrUnauthorized) {
+	if !errors.Is(err, shared.ErrUnauthorized) {
 		t.Fatalf("Expected ErrUnauthorized for invalid password, got: %v", err)
 	}
 
 	// Non-existent user login
 	_, _, err = authService.Login(ctx, "nonexistent@example.com", "secret123")
-	if !errors.Is(err, utils.ErrUnauthorized) {
+	if !errors.Is(err, shared.ErrUnauthorized) {
 		t.Fatalf("Expected ErrUnauthorized for missing user, got: %v", err)
 	}
 }
@@ -99,11 +99,11 @@ func TestTodolistService_TransactionRollback(t *testing.T) {
 
 	// Attempt bulk update by user 1 including list2 (owned by user 2)
 	// The transaction must fail and roll back list1's title!
-	_, err = todolistService.UpdateBulk(ctx, 1, []db.Todolist{
+	_, err = todolistService.UpdateBulk(ctx, 1, []business.Todolist{
 		{ID: list1.ID, Title: "List 1 Mutated"},
 		{ID: list2.ID, Title: "List 2 Hijacked"},
 	})
-	if !errors.Is(err, utils.ErrNotFound) {
+	if !errors.Is(err, shared.ErrNotFound) {
 		t.Fatalf("Expected ErrNotFound when attempting to update other user's list, got: %v", err)
 	}
 
@@ -122,7 +122,7 @@ func TestTodoService_TransactionRollback(t *testing.T) {
 	_, _, todoService := setupIsolatedServiceDB(t)
 
 	// Create initial todos for user 1
-	created, err := todoService.CreateBulk(ctx, 1, []db.Todo{
+	created, err := todoService.CreateBulk(ctx, 1, []business.Todo{
 		{Message: "Todo 1", Check: false},
 		{Message: "Todo 2", Check: false},
 	})
@@ -133,11 +133,11 @@ func TestTodoService_TransactionRollback(t *testing.T) {
 	newMsg := "Todo 1 Mutated"
 	// Attempt bulk update with valid item and non-existent item
 	// Transaction must roll back!
-	_, err = todoService.UpdateBulk(ctx, 1, []db.TodoUpdateItem{
+	_, err = todoService.UpdateBulk(ctx, 1, []business.TodoUpdateItem{
 		{ID: created[0].ID, Message: &newMsg},
 		{ID: 99999, Message: &newMsg},
 	})
-	if !errors.Is(err, utils.ErrNotFound) {
+	if !errors.Is(err, shared.ErrNotFound) {
 		t.Fatalf("Expected ErrNotFound on non-existent item in bulk update, got: %v", err)
 	}
 

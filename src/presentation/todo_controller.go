@@ -1,4 +1,4 @@
-package routes
+package presentation
 
 import (
 	"encoding/json"
@@ -6,23 +6,22 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"go-gin-todo/src/db"
-	"go-gin-todo/src/services"
-	"go-gin-todo/src/utils"
+	"go-gin-todo/src/business"
+	"go-gin-todo/src/shared"
 )
 
-// TodoHandler handles HTTP requests for Todo resources.
-type TodoHandler struct {
-	service *services.TodoService
+// TodoController handles HTTP requests for Todo resources.
+type TodoController struct {
+	service *business.TodoService
 }
 
-// NewTodoHandler constructs a new TodoHandler.
-func NewTodoHandler(service *services.TodoService) *TodoHandler {
-	return &TodoHandler{service: service}
+// NewTodoController constructs a new TodoController.
+func NewTodoController(service *business.TodoService) *TodoController {
+	return &TodoController{service: service}
 }
 
 // GetBulk handles GET /todo.
-func (h *TodoHandler) GetBulk(c *gin.Context) {
+func (h *TodoController) GetBulk(c *gin.Context) {
 	userID, err := GetUserID(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -31,7 +30,7 @@ func (h *TodoHandler) GetBulk(c *gin.Context) {
 
 	search := c.Query("search")
 	checkParam := c.Query("check")
-	page, limit := utils.ParsePagination(c)
+	page, limit := shared.ParsePagination(c)
 
 	var checkFilter *bool
 	if checkParam != "" {
@@ -53,7 +52,7 @@ func (h *TodoHandler) GetBulk(c *gin.Context) {
 }
 
 // GetOne handles GET /todo/:id.
-func (h *TodoHandler) GetOne(c *gin.Context) {
+func (h *TodoController) GetOne(c *gin.Context) {
 	userID, err := GetUserID(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -75,7 +74,7 @@ func (h *TodoHandler) GetOne(c *gin.Context) {
 }
 
 // Create handles POST /todo (single or bulk).
-func (h *TodoHandler) Create(c *gin.Context) {
+func (h *TodoController) Create(c *gin.Context) {
 	userID, err := GetUserID(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -129,14 +128,14 @@ func (h *TodoHandler) Create(c *gin.Context) {
 	})
 }
 
-func (h *TodoHandler) createBulkResponse(c *gin.Context, userID uint, inputs []CreateTodoRequest) {
-	domainTodos := make([]db.Todo, 0, len(inputs))
+func (h *TodoController) createBulkResponse(c *gin.Context, userID uint, inputs []CreateTodoRequest) {
+	domainTodos := make([]business.Todo, 0, len(inputs))
 	for _, item := range inputs {
 		isCheck := false
 		if item.Check != nil {
 			isCheck = *item.Check
 		}
-		domainTodos = append(domainTodos, db.Todo{
+		domainTodos = append(domainTodos, business.Todo{
 			Message: item.Message,
 			Check:   isCheck,
 		})
@@ -156,7 +155,7 @@ func (h *TodoHandler) createBulkResponse(c *gin.Context, userID uint, inputs []C
 }
 
 // PatchOneOrBulk handles PATCH /todo (single or bulk).
-func (h *TodoHandler) PatchOneOrBulk(c *gin.Context) {
+func (h *TodoController) PatchOneOrBulk(c *gin.Context) {
 	userID, err := GetUserID(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -207,9 +206,9 @@ func (h *TodoHandler) PatchOneOrBulk(c *gin.Context) {
 		return
 	}
 
-	updates := make([]db.TodoUpdateItem, len(itemsToUpdate))
+	updates := make([]business.TodoUpdateItem, len(itemsToUpdate))
 	for i, item := range itemsToUpdate {
-		updates[i] = db.TodoUpdateItem{
+		updates[i] = business.TodoUpdateItem{
 			ID:      item.ID,
 			Message: item.Message,
 			Check:   item.Check,
@@ -238,7 +237,7 @@ func (h *TodoHandler) PatchOneOrBulk(c *gin.Context) {
 }
 
 // PatchByID handles PATCH /todo/:id.
-func (h *TodoHandler) PatchByID(c *gin.Context) {
+func (h *TodoController) PatchByID(c *gin.Context) {
 	userID, err := GetUserID(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -272,7 +271,7 @@ func (h *TodoHandler) PatchByID(c *gin.Context) {
 }
 
 // DeleteOneOrBulk handles DELETE /todo (single or bulk via body).
-func (h *TodoHandler) DeleteOneOrBulk(c *gin.Context) {
+func (h *TodoController) DeleteOneOrBulk(c *gin.Context) {
 	userID, err := GetUserID(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -323,7 +322,7 @@ func (h *TodoHandler) DeleteOneOrBulk(c *gin.Context) {
 }
 
 // DeleteByID handles DELETE /todo/:id.
-func (h *TodoHandler) DeleteByID(c *gin.Context) {
+func (h *TodoController) DeleteByID(c *gin.Context) {
 	userID, err := GetUserID(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})

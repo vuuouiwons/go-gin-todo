@@ -1,4 +1,4 @@
-package routes
+package presentation
 
 import (
 	"net/http"
@@ -12,9 +12,9 @@ import (
 func SetupRouter(
 	ginMode string,
 	jwtSecret string,
-	authHandler *AuthHandler,
-	todolistHandler *TodolistHandler,
-	todoHandler *TodoHandler,
+	authController *AuthController,
+	todolistController *TodolistController,
+	todoController *TodoController,
 ) *gin.Engine {
 	if ginMode == "release" {
 		gin.SetMode(gin.ReleaseMode)
@@ -25,7 +25,7 @@ func SetupRouter(
 
 	router.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
-			"message":        "Pragmatic 3-Layer Architecture Go Gin Todo Server",
+			"message":        "3-Layer Architecture Go Gin Todo Server",
 			"prefix":         "/api",
 			"defaultVersion": "v1",
 			"docs":           "/docs",
@@ -71,7 +71,7 @@ func SetupRouter(
 	})
 
 	v1Group := apiGroup.Group("/v1")
-	registerRoutes(v1Group, jwtSecret, authHandler, todolistHandler, todoHandler)
+	registerRoutes(v1Group, jwtSecret, authController, todolistController, todoController)
 
 	// Transparently route unversioned /api/* requests to default version /api/v1/*
 	router.NoRoute(func(c *gin.Context) {
@@ -90,42 +90,42 @@ func SetupRouter(
 func registerRoutes(
 	rg *gin.RouterGroup,
 	jwtSecret string,
-	authHandler *AuthHandler,
-	todolistHandler *TodolistHandler,
-	todoHandler *TodoHandler,
+	authController *AuthController,
+	todolistController *TodolistController,
+	todoController *TodoController,
 ) {
 	rg.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "UP", "version": "v1"})
 	})
 
-	rg.POST("/register", authHandler.Register)
-	rg.POST("/login", authHandler.Login)
+	rg.POST("/register", authController.Register)
+	rg.POST("/login", authController.Login)
 
 	protected := rg.Group("")
 	protected.Use(AuthMiddleware(jwtSecret))
 	{
 		todolistGroup := protected.Group("/todolist")
 		{
-			todolistGroup.GET("", todolistHandler.GetBulk)
-			todolistGroup.POST("", todolistHandler.Create)
-			todolistGroup.PATCH("", todolistHandler.PatchOneOrBulk)
-			todolistGroup.DELETE("", todolistHandler.DeleteOneOrBulk)
+			todolistGroup.GET("", todolistController.GetBulk)
+			todolistGroup.POST("", todolistController.Create)
+			todolistGroup.PATCH("", todolistController.PatchOneOrBulk)
+			todolistGroup.DELETE("", todolistController.DeleteOneOrBulk)
 
-			todolistGroup.GET("/:id", todolistHandler.GetOne)
-			todolistGroup.PATCH("/:id", todolistHandler.PatchByID)
-			todolistGroup.DELETE("/:id", todolistHandler.DeleteByID)
+			todolistGroup.GET("/:id", todolistController.GetOne)
+			todolistGroup.PATCH("/:id", todolistController.PatchByID)
+			todolistGroup.DELETE("/:id", todolistController.DeleteByID)
 		}
 
 		todoGroup := protected.Group("/todo")
 		{
-			todoGroup.GET("", todoHandler.GetBulk)
-			todoGroup.POST("", todoHandler.Create)
-			todoGroup.PATCH("", todoHandler.PatchOneOrBulk)
-			todoGroup.DELETE("", todoHandler.DeleteOneOrBulk)
+			todoGroup.GET("", todoController.GetBulk)
+			todoGroup.POST("", todoController.Create)
+			todoGroup.PATCH("", todoController.PatchOneOrBulk)
+			todoGroup.DELETE("", todoController.DeleteOneOrBulk)
 
-			todoGroup.GET("/:id", todoHandler.GetOne)
-			todoGroup.PATCH("/:id", todoHandler.PatchByID)
-			todoGroup.DELETE("/:id", todoHandler.DeleteByID)
+			todoGroup.GET("/:id", todoController.GetOne)
+			todoGroup.PATCH("/:id", todoController.PatchByID)
+			todoGroup.DELETE("/:id", todoController.DeleteByID)
 		}
 	}
 }

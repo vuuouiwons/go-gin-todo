@@ -1,4 +1,4 @@
-package db
+package data
 
 import (
 	"log"
@@ -18,7 +18,7 @@ func Connect(dbPath string) (*gorm.DB, error) {
 		return nil, err
 	}
 
-	if err := database.AutoMigrate(&User{}, &Todolist{}, &Todo{}); err != nil {
+	if err := database.AutoMigrate(&UserEntity{}, &TodolistEntity{}, &TodoEntity{}); err != nil {
 		log.Printf("Failed to run database auto-migrations: %v\n", err)
 		return nil, err
 	}

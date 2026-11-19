@@ -6,10 +6,12 @@ It features JWT authentication, bcrypt password hashing, pure-Go SQLite persiste
 
 ---
 
-## Pragmatic 3-Layer Architecture
+## 3-Layer Architecture & Directory Structure
+
+Adheres strictly to the architectural boundaries, naming conventions, and dependency rules defined in [AGENTS.md](file:///d:/IT-projects/go-gin-todo/AGENTS.md):
 
 **Data & Dependency Flow:**
-`Inbound Interface (HTTP)` ➔ `Controllers / Handlers (src/routes)` ➔ `Services (src/services)` ➔ `Data Access (src/db)`
+`Inbound HTTP` ➔ `Presentation (src/presentation)` ➔ `Business (src/business)` ➔ `Data (src/data)` + `Shared (src/shared)`
 
 ```text
 go-gin-todo/
@@ -17,33 +19,34 @@ go-gin-todo/
 │   ├── docs.go                                   # Embedded OpenAPI specification (//go:embed)
 │   └── openapi.json                              # OpenAPI 3.0 specification
 ├── src/
-│   ├── routes/                                   # 1. Routes & Handlers (Transport & Response Shaping)
+│   ├── presentation/                             # 1. Presentation Layer (Controllers, Routes, Middlewares, DTOs)
 │   │   ├── dto.go                                # Request & Response DTOs (Boundary Security)
-│   │   ├── helpers.go                            # Pagination, ID/body parsing, error mapping
+│   │   ├── helpers.go                            # Pagination, ID/body parsing, domain error mapping
 │   │   ├── middleware.go                         # AuthMiddleware & CORSMiddleware
-│   │   ├── handlers_auth.go                      # Auth HTTP handlers (Register & Login)
-│   │   ├── handlers_todolist.go                  # Todolist HTTP handlers (CRUD & bulk)
-│   │   ├── handlers_todo.go                      # Todo HTTP handlers (CRUD & bulk)
+│   │   ├── auth_controller.go                    # Auth HTTP controller (Register & Login)
+│   │   ├── todolist_controller.go                # Todolist HTTP controller (CRUD & bulk)
+│   │   ├── todo_controller.go                    # Todo HTTP controller (CRUD & bulk)
 │   │   └── router.go                             # Route definitions & URI versioning
 │   │
-│   ├── services/                                 # 2. Services (Business Logic & Transactions)
+│   ├── business/                                 # 2. Business Logic Layer (Services, Domain Models, Rules, Interfaces)
+│   │   ├── models.go                             # Domain models (User, Todolist, Todo, Pagination)
+│   │   ├── interfaces.go                         # Repository interfaces (IUserRepository, ITodolistRepository, ITodoRepository)
 │   │   ├── auth_service.go                       # Registration, password hashing, JWT issuing
-│   │   ├── todolist_service.go                   # Todolist business rules & GORM transactions
-│   │   ├── todo_service.go                       # Todo business rules & GORM transactions
+│   │   ├── todolist_service.go                   # Todolist business rules
+│   │   ├── todo_service.go                       # Todo business rules
 │   │   └── services_test.go                      # Unit tests for business logic & transaction rollbacks
 │   │
-│   ├── db/                                       # 3. Data Access (Connection, Models, & Repositories)
+│   ├── data/                                     # 3. Data Access Layer (Repository Implementations, Entities, Mappers)
 │   │   ├── connection.go                         # SQLite connection & auto-migrations
-│   │   ├── models.go                             # GORM schema models (User, Todolist, Todo, Pagination)
-│   │   └── repository/                           # Reusable database queries & WithTx scoping
-│   │       ├── user_repo.go                      # Reusable queries for User
-│   │       ├── todolist_repo.go                  # Reusable queries for Todolist (CRUD, bulk, search)
-│   │       ├── todo_repo.go                      # Reusable queries for Todo (CRUD, bulk, search, filter)
-│   │       └── repo_test.go                      # Repository query unit tests & WithTx validation
+│   │   ├── entities.go                           # GORM ORM models & entity-to-domain mappers
+│   │   ├── user_repository.go                    # Concrete implementation of IUserRepository
+│   │   ├── todolist_repository.go                # Concrete implementation of ITodolistRepository (CRUD, bulk transaction)
+│   │   ├── todo_repository.go                    # Concrete implementation of ITodoRepository (CRUD, bulk transaction)
+│   │   └── repo_test.go                          # Repository query unit tests & WithTx validation
 │   │
-│   └── utils/                                    # Stateless Helpers
+│   └── shared/                                   # Shared Utilities (Custom Domain Errors, Pure Utilities)
 │       ├── auth.go                               # Bcrypt hashing & JWT token manager
-│       ├── errors.go                             # Shared application domain errors
+│       ├── errors.go                             # Custom domain errors (ErrNotFound, ErrConflict, etc.)
 │       ├── pagination.go                         # Pagination helpers & calculation
 │       └── config.go                             # Environment configuration loader
 ├── tests/

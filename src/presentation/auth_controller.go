@@ -1,24 +1,24 @@
-package routes
+package presentation
 
 import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"go-gin-todo/src/services"
+	"go-gin-todo/src/business"
 )
 
-// AuthHandler handles HTTP requests for user authentication.
-type AuthHandler struct {
-	authService *services.AuthService
+// AuthController handles HTTP requests for user authentication.
+type AuthController struct {
+	authService *business.AuthService
 }
 
-// NewAuthHandler constructs a new AuthHandler.
-func NewAuthHandler(authService *services.AuthService) *AuthHandler {
-	return &AuthHandler{authService: authService}
+// NewAuthController constructs a new AuthController.
+func NewAuthController(authService *business.AuthService) *AuthController {
+	return &AuthController{authService: authService}
 }
 
 // Register handles POST /register.
-func (h *AuthHandler) Register(c *gin.Context) {
+func (h *AuthController) Register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body: " + err.Error()})
@@ -38,7 +38,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 }
 
 // Login handles POST /login.
-func (h *AuthHandler) Login(c *gin.Context) {
+func (h *AuthController) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body: " + err.Error()})

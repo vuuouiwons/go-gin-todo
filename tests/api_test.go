@@ -11,11 +11,10 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"go-gin-todo/src/db"
-	"go-gin-todo/src/db/repository"
-	"go-gin-todo/src/routes"
-	"go-gin-todo/src/services"
-	"go-gin-todo/src/utils"
+	"go-gin-todo/src/business"
+	"go-gin-todo/src/data"
+	"go-gin-todo/src/presentation"
+	"go-gin-todo/src/shared"
 	"gorm.io/gorm"
 )
 
@@ -30,7 +29,7 @@ func TestMain(m *testing.M) {
 	testDBPath := "test_e2e_todo.db"
 	_ = os.Remove(testDBPath)
 
-	cfg := &utils.Config{
+	cfg := &shared.Config{
 		Port:              "8080",
 		JWTSecret:         "test-secret-key-12345",
 		JWTExpiresInHours: 2,
@@ -38,25 +37,25 @@ func TestMain(m *testing.M) {
 		GinMode:           "test",
 	}
 
-	database, err := db.Connect(cfg.DBPath)
+	database, err := data.Connect(cfg.DBPath)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to connect to test database: %v", err))
 	}
 	testDB = database
 
-	userRepo := repository.NewUserRepository(database)
-	todolistRepo := repository.NewTodolistRepository(database)
-	todoRepo := repository.NewTodoRepository(database)
+	userRepo := data.NewUserRepository(database)
+	todolistRepo := data.NewTodolistRepository(database)
+	todoRepo := data.NewTodoRepository(database)
 
-	authService := services.NewAuthService(userRepo, cfg.JWTSecret, cfg.JWTExpiresInHours)
-	todolistService := services.NewTodolistService(database, todolistRepo)
-	todoService := services.NewTodoService(database, todoRepo)
+	authService := business.NewAuthService(userRepo, cfg.JWTSecret, cfg.JWTExpiresInHours)
+	todolistService := business.NewTodolistService(todolistRepo)
+	todoService := business.NewTodoService(todoRepo)
 
-	authHandler := routes.NewAuthHandler(authService)
-	todolistHandler := routes.NewTodolistHandler(todolistService)
-	todoHandler := routes.NewTodoHandler(todoService)
+	authController := presentation.NewAuthController(authService)
+	todolistController := presentation.NewTodolistController(todolistService)
+	todoController := presentation.NewTodoController(todoService)
 
-	testRouter = routes.SetupRouter(cfg.GinMode, cfg.JWTSecret, authHandler, todolistHandler, todoHandler)
+	testRouter = presentation.SetupRouter(cfg.GinMode, cfg.JWTSecret, authController, todolistController, todoController)
 
 	code := m.Run()
 

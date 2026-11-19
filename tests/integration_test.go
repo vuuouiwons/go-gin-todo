@@ -6,18 +6,17 @@ import (
 	"path/filepath"
 	"testing"
 
-	"go-gin-todo/src/db"
-	"go-gin-todo/src/db/repository"
-	"go-gin-todo/src/services"
-	"go-gin-todo/src/utils"
+	"go-gin-todo/src/business"
+	"go-gin-todo/src/data"
+	"go-gin-todo/src/shared"
 	"gorm.io/gorm"
 )
 
-func setupIsolatedIntegrationDB(t *testing.T) (*gorm.DB, *services.AuthService, *services.TodolistService, *services.TodoService) {
+func setupIsolatedIntegrationDB(t *testing.T) (*gorm.DB, *business.AuthService, *business.TodolistService, *business.TodoService) {
 	t.Helper()
 
 	dbPath := filepath.Join(t.TempDir(), "integration.db")
-	database, err := db.Connect(dbPath)
+	database, err := data.Connect(dbPath)
 	if err != nil {
 		t.Fatalf("failed to create isolated test DB: %v", err)
 	}
@@ -27,13 +26,13 @@ func setupIsolatedIntegrationDB(t *testing.T) (*gorm.DB, *services.AuthService, 
 		}
 	})
 
-	userRepo := repository.NewUserRepository(database)
-	todolistRepo := repository.NewTodolistRepository(database)
-	todoRepo := repository.NewTodoRepository(database)
+	userRepo := data.NewUserRepository(database)
+	todolistRepo := data.NewTodolistRepository(database)
+	todoRepo := data.NewTodoRepository(database)
 
-	authService := services.NewAuthService(userRepo, "jwt-secret", 2)
-	todolistService := services.NewTodolistService(database, todolistRepo)
-	todoService := services.NewTodoService(database, todoRepo)
+	authService := business.NewAuthService(userRepo, "jwt-secret", 2)
+	todolistService := business.NewTodolistService(todolistRepo)
+	todoService := business.NewTodoService(todoRepo)
 
 	return database, authService, todolistService, todoService
 }
@@ -52,12 +51,12 @@ func TestIntegration_UserRepositoryConstraints(t *testing.T) {
 
 	// Duplicate email violates unique index
 	_, err = authService.Register(ctx, "alice@example.com", "otherpassword")
-	if !errors.Is(err, utils.ErrConflict) {
-		t.Fatalf("expected utils.ErrConflict on duplicate email, got: %v", err)
+	if !errors.Is(err, shared.ErrConflict) {
+		t.Fatalf("expected shared.ErrConflict on duplicate email, got: %v", err)
 	}
 
 	// Verify DB record directly
-	var found db.User
+	var found data.UserEntity
 	if err := database.Where("email = ?", "alice@example.com").First(&found).Error; err != nil || found.ID != u.ID {
 		t.Fatalf("database query failed: got=%+v err=%v", found, err)
 	}
@@ -106,11 +105,11 @@ func TestIntegration_TodolistQueriesAndTransactionRollback(t *testing.T) {
 	}
 
 	// Real DB transaction rollback test via TodolistService.UpdateBulk
-	_, err = todolistService.UpdateBulk(ctx, 1, []db.Todolist{
+	_, err = todolistService.UpdateBulk(ctx, 1, []business.Todolist{
 		{ID: filtered[0].ID, Title: "Mutated Then Rolled Back"},
 		{ID: 99999, Title: "Nonexistent"},
 	})
-	if !errors.Is(err, utils.ErrNotFound) {
+	if !errors.Is(err, shared.ErrNotFound) {
 		t.Fatalf("expected ErrNotFound, got %v", err)
 	}
 
@@ -127,7 +126,7 @@ func TestIntegration_TodoQueriesAndFilters(t *testing.T) {
 	ctx := context.Background()
 	_, _, _, todoService := setupIsolatedIntegrationDB(t)
 
-	_, err := todoService.CreateBulk(ctx, 1, []db.Todo{
+	_, err := todoService.CreateBulk(ctx, 1, []business.Todo{
 		{Message: "Buy organic milk", Check: false},
 		{Message: "Write integration tests", Check: true},
 		{Message: "Review PRs", Check: true},
@@ -136,7 +135,7 @@ func TestIntegration_TodoQueriesAndFilters(t *testing.T) {
 		t.Fatalf("seed todos failed: %v", err)
 	}
 
-	_, err = todoService.CreateBulk(ctx, 2, []db.Todo{
+	_, err = todoService.CreateBulk(ctx, 2, []business.Todo{
 		{Message: "Buy milk for user 2", Check: false},
 	})
 	if err != nil {

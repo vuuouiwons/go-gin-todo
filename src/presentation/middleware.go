@@ -1,4 +1,4 @@
-package routes
+package presentation
 
 import (
 	"errors"
@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"go-gin-todo/src/utils"
+	"go-gin-todo/src/shared"
 )
 
 const (
@@ -29,7 +29,7 @@ func AuthMiddleware(secret string) gin.HandlerFunc {
 			return
 		}
 
-		claims, err := utils.ValidateToken(parts[1], secret)
+		claims, err := shared.ValidateToken(parts[1], secret)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
 			return

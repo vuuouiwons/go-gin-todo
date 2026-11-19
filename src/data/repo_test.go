@@ -1,4 +1,4 @@
-package repository
+package data
 
 import (
 	"context"
@@ -6,15 +6,15 @@ import (
 	"path/filepath"
 	"testing"
 
-	"go-gin-todo/src/db"
-	"go-gin-todo/src/utils"
+	"go-gin-todo/src/business"
+	"go-gin-todo/src/shared"
 	"gorm.io/gorm"
 )
 
 func setupTestDB(t *testing.T) (*gorm.DB, *UserRepository, *TodolistRepository, *TodoRepository) {
 	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "repo_test.db")
-	database, err := db.Connect(dbPath)
+	database, err := Connect(dbPath)
 	if err != nil {
 		t.Fatalf("Failed to connect to test db: %v", err)
 	}
@@ -32,7 +32,7 @@ func TestUserRepository_CRUD(t *testing.T) {
 	ctx := context.Background()
 	_, userRepo, _, _ := setupTestDB(t)
 
-	user := &db.User{Email: "bob@example.com", Password: "hashedpassword"}
+	user := &business.User{Email: "bob@example.com", Password: "hashedpassword"}
 	if err := userRepo.Create(ctx, user); err != nil {
 		t.Fatalf("Create user failed: %v", err)
 	}
@@ -51,7 +51,7 @@ func TestUserRepository_CRUD(t *testing.T) {
 	}
 
 	_, err = userRepo.GetByEmail(ctx, "nonexistent@example.com")
-	if !errors.Is(err, utils.ErrNotFound) {
+	if !errors.Is(err, shared.ErrNotFound) {
 		t.Fatalf("Expected ErrNotFound for missing email, got %v", err)
 	}
 }
@@ -60,12 +60,12 @@ func TestTodolistRepository_CRUDAndWithTx(t *testing.T) {
 	ctx := context.Background()
 	database, _, listRepo, _ := setupTestDB(t)
 
-	item := &db.Todolist{UserID: 1, Title: "List A"}
+	item := &business.Todolist{UserID: 1, Title: "List A"}
 	if err := listRepo.Create(ctx, item); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
-	bulk := []db.Todolist{
+	bulk := []business.Todolist{
 		{UserID: 1, Title: "List B"},
 		{UserID: 1, Title: "List C"},
 	}
@@ -106,12 +106,12 @@ func TestTodoRepository_CRUDAndWithTx(t *testing.T) {
 	ctx := context.Background()
 	database, _, _, todoRepo := setupTestDB(t)
 
-	todo := &db.Todo{UserID: 1, Message: "Task 1", Check: false}
+	todo := &business.Todo{UserID: 1, Message: "Task 1", Check: false}
 	if err := todoRepo.Create(ctx, todo); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
-	bulk := []db.Todo{
+	bulk := []business.Todo{
 		{UserID: 1, Message: "Task 2", Check: true},
 		{UserID: 1, Message: "Task 3", Check: false},
 	}

@@ -1,9 +1,10 @@
-package routes
+package presentation
 
 import (
 	"time"
 
-	"go-gin-todo/src/db"
+	"go-gin-todo/src/business"
+	"go-gin-todo/src/shared"
 )
 
 // --- Request DTOs ---
@@ -50,7 +51,7 @@ type UserResponse struct {
 	Email string `json:"email"`
 }
 
-func ToUserResponse(u *db.User) UserResponse {
+func ToUserResponse(u *business.User) UserResponse {
 	return UserResponse{
 		ID:    u.ID,
 		Email: u.Email,
@@ -66,7 +67,7 @@ type TodoResponse struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
-func ToTodoResponse(t *db.Todo) TodoResponse {
+func ToTodoResponse(t *business.Todo) TodoResponse {
 	return TodoResponse{
 		ID:        t.ID,
 		UserID:    t.UserID,
@@ -77,7 +78,7 @@ func ToTodoResponse(t *db.Todo) TodoResponse {
 	}
 }
 
-func ToTodoResponseList(todos []db.Todo) []TodoResponse {
+func ToTodoResponseList(todos []business.Todo) []TodoResponse {
 	res := make([]TodoResponse, len(todos))
 	for i := range todos {
 		res[i] = ToTodoResponse(&todos[i])
@@ -93,7 +94,7 @@ type TodolistResponse struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
-func ToTodolistResponse(tl *db.Todolist) TodolistResponse {
+func ToTodolistResponse(tl *business.Todolist) TodolistResponse {
 	return TodolistResponse{
 		ID:        tl.ID,
 		UserID:    tl.UserID,
@@ -103,7 +104,7 @@ func ToTodolistResponse(tl *db.Todolist) TodolistResponse {
 	}
 }
 
-func ToTodolistResponseList(todolists []db.Todolist) []TodolistResponse {
+func ToTodolistResponseList(todolists []business.Todolist) []TodolistResponse {
 	res := make([]TodolistResponse, len(todolists))
 	for i := range todolists {
 		res[i] = ToTodolistResponse(&todolists[i])
@@ -120,7 +121,7 @@ type PaginationResponse struct {
 	HasPrev    bool  `json:"hasPrev"`
 }
 
-func ToPaginationResponse(p db.Pagination) PaginationResponse {
+func ToPaginationResponse(p shared.Pagination) PaginationResponse {
 	return PaginationResponse{
 		Page:       p.Page,
 		Limit:      p.Limit,
