@@ -7,13 +7,9 @@ import (
 	"testing"
 
 	"go-gin-todo/src/db"
+	"go-gin-todo/src/db/repository"
 	"go-gin-todo/src/utils"
 )
-
-func setupTestDB(t *testing.T) *db.User {
-	t.Helper()
-	return nil
-}
 
 func setupIsolatedServiceDB(t *testing.T) (*AuthService, *TodolistService, *TodoService) {
 	t.Helper()
@@ -29,9 +25,13 @@ func setupIsolatedServiceDB(t *testing.T) (*AuthService, *TodolistService, *Todo
 		}
 	})
 
-	authService := NewAuthService(database, "test-secret-12345", 2)
-	todolistService := NewTodolistService(database)
-	todoService := NewTodoService(database)
+	userRepo := repository.NewUserRepository(database)
+	todolistRepo := repository.NewTodolistRepository(database)
+	todoRepo := repository.NewTodoRepository(database)
+
+	authService := NewAuthService(userRepo, "test-secret-12345", 2)
+	todolistService := NewTodolistService(database, todolistRepo)
+	todoService := NewTodoService(database, todoRepo)
 
 	return authService, todolistService, todoService
 }

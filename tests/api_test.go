@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go-gin-todo/src/db"
+	"go-gin-todo/src/db/repository"
 	"go-gin-todo/src/routes"
 	"go-gin-todo/src/services"
 	"go-gin-todo/src/utils"
@@ -43,9 +44,13 @@ func TestMain(m *testing.M) {
 	}
 	testDB = database
 
-	authService := services.NewAuthService(database, cfg.JWTSecret, cfg.JWTExpiresInHours)
-	todolistService := services.NewTodolistService(database)
-	todoService := services.NewTodoService(database)
+	userRepo := repository.NewUserRepository(database)
+	todolistRepo := repository.NewTodolistRepository(database)
+	todoRepo := repository.NewTodoRepository(database)
+
+	authService := services.NewAuthService(userRepo, cfg.JWTSecret, cfg.JWTExpiresInHours)
+	todolistService := services.NewTodolistService(database, todolistRepo)
+	todoService := services.NewTodoService(database, todoRepo)
 
 	authHandler := routes.NewAuthHandler(authService)
 	todolistHandler := routes.NewTodolistHandler(todolistService)

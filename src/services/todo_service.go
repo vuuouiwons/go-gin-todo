@@ -2,23 +2,26 @@ package services
 
 import (
 	"context"
-	"errors"
 	"strings"
 
 	"go-gin-todo/src/db"
+	"go-gin-todo/src/db/repository"
 	"go-gin-todo/src/utils"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
-// TodoService encapsulates business logic and data access for Todo items.
+// TodoService encapsulates business logic and coordinates repository operations.
 type TodoService struct {
-	db *gorm.DB
+	db   *gorm.DB
+	repo *repository.TodoRepository
 }
 
-// NewTodoService constructs a new TodoService backed directly by GORM.
-func NewTodoService(database *gorm.DB) *TodoService {
-	return &TodoService{db: database}
+// NewTodoService constructs a new TodoService with a reusable TodoRepository and DB handle for transactions.
+func NewTodoService(database *gorm.DB, repo *repository.TodoRepository) *TodoService {
+	return &TodoService{
+		db:   database,
+		repo: repo,
+	}
 }
 
 // CreateOne validates and creates a single Todo item for a user.
@@ -34,7 +37,7 @@ func (s *TodoService) CreateOne(ctx context.Context, userID uint, message string
 		Check:   check,
 	}
 
-	if err := s.db.WithContext(ctx).Create(todo).Error; err != nil {
+	if err := s.repo.Create(ctx, todo); err != nil {
 		return nil, utils.ErrInternalServer
 	}
 
@@ -60,7 +63,7 @@ func (s *TodoService) CreateBulk(ctx context.Context, userID uint, items []db.To
 		})
 	}
 
-	if err := s.db.WithContext(ctx).Create(&todos).Error; err != nil {
+	if err := s.repo.CreateBulk(ctx, &todos); err != nil {
 		return nil, utils.ErrInternalServer
 	}
 
@@ -73,44 +76,18 @@ func (s *TodoService) GetByID(ctx context.Context, id, userID uint) (*db.Todo, e
 		return nil, utils.ErrBadRequest
 	}
 
-	var item db.Todo
-	err := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", id, userID).First(&item).Error
+	item, err := s.repo.GetByID(ctx, id, userID)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, utils.ErrNotFound
-		}
-		return nil, utils.ErrInternalServer
+		return nil, err
 	}
 
-	return &item, nil
+	return item, nil
 }
 
 // GetBulk retrieves paginated and filtered Todos for a user ordered by id DESC.
 func (s *TodoService) GetBulk(ctx context.Context, userID uint, search string, checkFilter *bool, page, limit int) ([]db.Todo, db.Pagination, error) {
-	query := s.db.WithContext(ctx).Model(&db.Todo{}).Where("user_id = ?", userID)
-
-	search = strings.TrimSpace(search)
-	if search != "" {
-		query = query.Clauses(clause.Like{Column: "message", Value: "%" + search + "%"})
-	}
-
-	if checkFilter != nil {
-		query = query.Where("`check` = ?", *checkFilter)
-	}
-
-	var totalItems int64
-	if err := query.Count(&totalItems).Error; err != nil {
-		return nil, db.Pagination{}, utils.ErrInternalServer
-	}
-
-	pagination := utils.CalculatePagination(page, limit, totalItems)
-	offset := (pagination.Page - 1) * pagination.Limit
-	if offset < 0 {
-		offset = 0
-	}
-
-	var items []db.Todo
-	if err := query.Order("id DESC").Limit(pagination.Limit).Offset(offset).Find(&items).Error; err != nil {
+	items, pagination, err := s.repo.GetBulk(ctx, userID, search, checkFilter, page, limit)
+	if err != nil {
 		return nil, db.Pagination{}, utils.ErrInternalServer
 	}
 
@@ -144,7 +121,7 @@ func (s *TodoService) UpdateByID(ctx context.Context, id, userID uint, message *
 		item.Check = *check
 	}
 
-	if err := s.db.WithContext(ctx).Save(item).Error; err != nil {
+	if err := s.repo.Save(ctx, item); err != nil {
 		return nil, utils.ErrInternalServer
 	}
 
@@ -181,10 +158,12 @@ func (s *TodoService) UpdateBulk(ctx context.Context, userID uint, updates []db.
 
 	var result []db.Todo
 
-	// Typical GORM transaction pattern for multi-step atomic operations
+	// Typical GORM transaction pattern with repository scoping via WithTx
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var existing []db.Todo
-		if err := tx.Where("user_id = ? AND id IN ?", userID, ids).Find(&existing).Error; err != nil {
+		txRepo := s.repo.WithTx(tx)
+
+		existing, err := txRepo.FindByIDs(ctx, userID, ids)
+		if err != nil {
 			return utils.ErrInternalServer
 		}
 
@@ -208,7 +187,7 @@ func (s *TodoService) UpdateBulk(ctx context.Context, userID uint, updates []db.
 			if item.Check != nil {
 				todo.Check = *item.Check
 			}
-			if err := tx.Save(&todo).Error; err != nil {
+			if err := txRepo.Save(ctx, &todo); err != nil {
 				return utils.ErrInternalServer
 			}
 			result[i] = todo
@@ -230,12 +209,12 @@ func (s *TodoService) DeleteByID(ctx context.Context, id, userID uint) (int64, e
 		return 0, utils.ErrBadRequest
 	}
 
-	res := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", id, userID).Delete(&db.Todo{})
-	if res.Error != nil {
+	rowsAffected, err := s.repo.DeleteByID(ctx, id, userID)
+	if err != nil {
 		return 0, utils.ErrInternalServer
 	}
 
-	return res.RowsAffected, nil
+	return rowsAffected, nil
 }
 
 // DeleteBulk removes multiple Todos by IDs verifying ownership.
@@ -244,10 +223,10 @@ func (s *TodoService) DeleteBulk(ctx context.Context, ids []uint, userID uint) (
 		return 0, utils.ErrBadRequest
 	}
 
-	res := s.db.WithContext(ctx).Where("user_id = ? AND id IN ?", userID, ids).Delete(&db.Todo{})
-	if res.Error != nil {
+	rowsAffected, err := s.repo.DeleteBulk(ctx, ids, userID)
+	if err != nil {
 		return 0, utils.ErrInternalServer
 	}
 
-	return res.RowsAffected, nil
+	return rowsAffected, nil
 }

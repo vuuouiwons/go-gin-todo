@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"go-gin-todo/src/db"
+	"go-gin-todo/src/db/repository"
 	"go-gin-todo/src/services"
 	"go-gin-todo/src/utils"
 	"gorm.io/gorm"
@@ -26,9 +27,13 @@ func setupIsolatedIntegrationDB(t *testing.T) (*gorm.DB, *services.AuthService, 
 		}
 	})
 
-	authService := services.NewAuthService(database, "jwt-secret", 2)
-	todolistService := services.NewTodolistService(database)
-	todoService := services.NewTodoService(database)
+	userRepo := repository.NewUserRepository(database)
+	todolistRepo := repository.NewTodolistRepository(database)
+	todoRepo := repository.NewTodoRepository(database)
+
+	authService := services.NewAuthService(userRepo, "jwt-secret", 2)
+	todolistService := services.NewTodolistService(database, todolistRepo)
+	todoService := services.NewTodoService(database, todoRepo)
 
 	return database, authService, todolistService, todoService
 }

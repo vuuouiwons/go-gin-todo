@@ -3,6 +3,7 @@ package db
 import (
 	"time"
 
+	"go-gin-todo/src/utils"
 	"gorm.io/gorm"
 )
 
@@ -12,7 +13,7 @@ type User struct {
 	Email     string         `gorm:"uniqueIndex;not null" json:"email"`
 	Password  string         `gorm:"not null" json:"-"`
 	CreatedAt time.Time      `json:"createdAt"`
-	UpdatedAt time.Time      `json:"updatedAt"`https://www.gstatic.com/antigravity/nuxes/gemini-4-neon.jpg
+	UpdatedAt time.Time      `json:"updatedAt"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
@@ -46,12 +47,5 @@ type TodoUpdateItem struct {
 	Check   *bool
 }
 
-// Pagination holds computed pagination metadata for list responses.
-type Pagination struct {
-	Page       int   `json:"page"`
-	Limit      int   `json:"limit"`
-	TotalItems int64 `json:"totalItems"`
-	TotalPages int   `json:"totalPages"`
-	HasNext    bool  `json:"hasNext"`
-	HasPrev    bool  `json:"hasPrev"`
-}
+// Pagination aliases utils.Pagination for list responses.
+type Pagination = utils.Pagination

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"go-gin-todo/src/db"
+	"go-gin-todo/src/db/repository"
 	"go-gin-todo/src/routes"
 	"go-gin-todo/src/services"
 	"go-gin-todo/src/utils"
@@ -29,12 +30,17 @@ func main() {
 		defer sqlDB.Close()
 	}
 
-	// 1. Services layer (Business logic & database transactions)
-	authService := services.NewAuthService(database, cfg.JWTSecret, cfg.JWTExpiresInHours)
-	todolistService := services.NewTodolistService(database)
-	todoService := services.NewTodoService(database)
+	// 1. Repositories in src/db/repository (reusable database queries)
+	userRepo := repository.NewUserRepository(database)
+	todolistRepo := repository.NewTodolistRepository(database)
+	todoRepo := repository.NewTodoRepository(database)
 
-	// 2. Routes layer (Handlers & Router)
+	// 2. Services layer (Business logic & database transactions)
+	authService := services.NewAuthService(userRepo, cfg.JWTSecret, cfg.JWTExpiresInHours)
+	todolistService := services.NewTodolistService(database, todolistRepo)
+	todoService := services.NewTodoService(database, todoRepo)
+
+	// 3. Routes layer (Handlers & Router)
 	authHandler := routes.NewAuthHandler(authService)
 	todolistHandler := routes.NewTodolistHandler(todolistService)
 	todoHandler := routes.NewTodoHandler(todoService)

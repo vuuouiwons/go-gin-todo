@@ -32,9 +32,14 @@ go-gin-todo/
 │   │   ├── todo_service.go                       # Todo business rules & GORM transactions
 │   │   └── services_test.go                      # Unit tests for business logic & transaction rollbacks
 │   │
-│   ├── db/                                       # 3. Data Access (GORM Connection & Models)
+│   ├── db/                                       # 3. Data Access (Connection, Models, & Repositories)
 │   │   ├── connection.go                         # SQLite connection & auto-migrations
-│   │   └── models.go                             # GORM schema models (User, Todolist, Todo, Pagination)
+│   │   ├── models.go                             # GORM schema models (User, Todolist, Todo, Pagination)
+│   │   └── repository/                           # Reusable database queries & WithTx scoping
+│   │       ├── user_repo.go                      # Reusable queries for User
+│   │       ├── todolist_repo.go                  # Reusable queries for Todolist (CRUD, bulk, search)
+│   │       ├── todo_repo.go                      # Reusable queries for Todo (CRUD, bulk, search, filter)
+│   │       └── repo_test.go                      # Repository query unit tests & WithTx validation
 │   │
 │   └── utils/                                    # Stateless Helpers
 │       ├── auth.go                               # Bcrypt hashing & JWT token manager

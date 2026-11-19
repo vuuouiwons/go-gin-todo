@@ -2,23 +2,26 @@ package services
 
 import (
 	"context"
-	"errors"
 	"strings"
 
 	"go-gin-todo/src/db"
+	"go-gin-todo/src/db/repository"
 	"go-gin-todo/src/utils"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
-// TodolistService encapsulates business logic and data access for Todolist resources.
+// TodolistService encapsulates business logic and coordinates repository operations.
 type TodolistService struct {
-	db *gorm.DB
+	db   *gorm.DB
+	repo *repository.TodolistRepository
 }
 
-// NewTodolistService constructs a new TodolistService backed directly by GORM.
-func NewTodolistService(database *gorm.DB) *TodolistService {
-	return &TodolistService{db: database}
+// NewTodolistService constructs a new TodolistService with a reusable TodolistRepository and DB handle for transactions.
+func NewTodolistService(database *gorm.DB, repo *repository.TodolistRepository) *TodolistService {
+	return &TodolistService{
+		db:   database,
+		repo: repo,
+	}
 }
 
 // CreateOne validates and persists a single Todolist for a user.
@@ -33,7 +36,7 @@ func (s *TodolistService) CreateOne(ctx context.Context, userID uint, title stri
 		Title:  title,
 	}
 
-	if err := s.db.WithContext(ctx).Create(todolist).Error; err != nil {
+	if err := s.repo.Create(ctx, todolist); err != nil {
 		return nil, utils.ErrInternalServer
 	}
 
@@ -58,7 +61,7 @@ func (s *TodolistService) CreateBulk(ctx context.Context, userID uint, titles []
 		})
 	}
 
-	if err := s.db.WithContext(ctx).Create(&items).Error; err != nil {
+	if err := s.repo.CreateBulk(ctx, &items); err != nil {
 		return nil, utils.ErrInternalServer
 	}
 
@@ -71,40 +74,18 @@ func (s *TodolistService) GetByID(ctx context.Context, id, userID uint) (*db.Tod
 		return nil, utils.ErrBadRequest
 	}
 
-	var item db.Todolist
-	err := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", id, userID).First(&item).Error
+	item, err := s.repo.GetByID(ctx, id, userID)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, utils.ErrNotFound
-		}
-		return nil, utils.ErrInternalServer
+		return nil, err
 	}
 
-	return &item, nil
+	return item, nil
 }
 
 // GetBulk retrieves paginated and filtered Todolists for a user ordered by id DESC.
 func (s *TodolistService) GetBulk(ctx context.Context, userID uint, search string, page, limit int) ([]db.Todolist, db.Pagination, error) {
-	query := s.db.WithContext(ctx).Model(&db.Todolist{}).Where("user_id = ?", userID)
-
-	search = strings.TrimSpace(search)
-	if search != "" {
-		query = query.Clauses(clause.Like{Column: "title", Value: "%" + search + "%"})
-	}
-
-	var totalItems int64
-	if err := query.Count(&totalItems).Error; err != nil {
-		return nil, db.Pagination{}, utils.ErrInternalServer
-	}
-
-	pagination := utils.CalculatePagination(page, limit, totalItems)
-	offset := (pagination.Page - 1) * pagination.Limit
-	if offset < 0 {
-		offset = 0
-	}
-
-	var items []db.Todolist
-	if err := query.Order("id DESC").Limit(pagination.Limit).Offset(offset).Find(&items).Error; err != nil {
+	items, pagination, err := s.repo.GetBulk(ctx, userID, search, page, limit)
+	if err != nil {
 		return nil, db.Pagination{}, utils.ErrInternalServer
 	}
 
@@ -124,7 +105,7 @@ func (s *TodolistService) UpdateByID(ctx context.Context, id, userID uint, title
 	}
 
 	item.Title = title
-	if err := s.db.WithContext(ctx).Save(item).Error; err != nil {
+	if err := s.repo.Save(ctx, item); err != nil {
 		return nil, utils.ErrInternalServer
 	}
 
@@ -154,10 +135,12 @@ func (s *TodolistService) UpdateBulk(ctx context.Context, userID uint, updates [
 
 	var result []db.Todolist
 
-	// Typical GORM transaction pattern for multi-step atomic operations
+	// Typical GORM transaction pattern with repository scoping via WithTx
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var existing []db.Todolist
-		if err := tx.Where("user_id = ? AND id IN ?", userID, ids).Find(&existing).Error; err != nil {
+		txRepo := s.repo.WithTx(tx)
+
+		existing, err := txRepo.FindByIDs(ctx, userID, ids)
+		if err != nil {
 			return utils.ErrInternalServer
 		}
 
@@ -176,7 +159,7 @@ func (s *TodolistService) UpdateBulk(ctx context.Context, userID uint, updates [
 		for i, u := range cleanUpdates {
 			item := existingMap[u.ID]
 			item.Title = u.Title
-			if err := tx.Save(&item).Error; err != nil {
+			if err := txRepo.Save(ctx, &item); err != nil {
 				return utils.ErrInternalServer
 			}
 			result[i] = item
@@ -198,12 +181,12 @@ func (s *TodolistService) DeleteByID(ctx context.Context, id, userID uint) (int6
 		return 0, utils.ErrBadRequest
 	}
 
-	res := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", id, userID).Delete(&db.Todolist{})
-	if res.Error != nil {
+	rowsAffected, err := s.repo.DeleteByID(ctx, id, userID)
+	if err != nil {
 		return 0, utils.ErrInternalServer
 	}
 
-	return res.RowsAffected, nil
+	return rowsAffected, nil
 }
 
 // DeleteBulk removes multiple Todolists by IDs verifying ownership.
@@ -212,10 +195,10 @@ func (s *TodolistService) DeleteBulk(ctx context.Context, ids []uint, userID uin
 		return 0, utils.ErrBadRequest
 	}
 
-	res := s.db.WithContext(ctx).Where("user_id = ? AND id IN ?", userID, ids).Delete(&db.Todolist{})
-	if res.Error != nil {
+	rowsAffected, err := s.repo.DeleteBulk(ctx, ids, userID)
+	if err != nil {
 		return 0, utils.ErrInternalServer
 	}
 
-	return res.RowsAffected, nil
+	return rowsAffected, nil
 }

@@ -6,21 +6,21 @@ import (
 	"strings"
 
 	"go-gin-todo/src/db"
+	"go-gin-todo/src/db/repository"
 	"go-gin-todo/src/utils"
-	"gorm.io/gorm"
 )
 
 // AuthService handles authentication, user registration, and credential verification.
 type AuthService struct {
-	db                *gorm.DB
+	userRepo          *repository.UserRepository
 	jwtSecret         string
 	jwtExpiresInHours int
 }
 
 // NewAuthService constructs a new AuthService instance.
-func NewAuthService(database *gorm.DB, jwtSecret string, jwtExpiresInHours int) *AuthService {
+func NewAuthService(userRepo *repository.UserRepository, jwtSecret string, jwtExpiresInHours int) *AuthService {
 	return &AuthService{
-		db:                database,
+		userRepo:          userRepo,
 		jwtSecret:         jwtSecret,
 		jwtExpiresInHours: jwtExpiresInHours,
 	}
@@ -33,12 +33,11 @@ func (s *AuthService) Register(ctx context.Context, email, password string) (*db
 		return nil, utils.ErrBadRequest
 	}
 
-	var existing db.User
-	err := s.db.WithContext(ctx).Where("email = ?", email).First(&existing).Error
-	if err == nil {
+	existing, err := s.userRepo.GetByEmail(ctx, email)
+	if err == nil && existing != nil {
 		return nil, utils.ErrConflict
 	}
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
+	if err != nil && !errors.Is(err, utils.ErrNotFound) {
 		return nil, utils.ErrInternalServer
 	}
 
@@ -52,7 +51,7 @@ func (s *AuthService) Register(ctx context.Context, email, password string) (*db
 		Password: hashedPassword,
 	}
 
-	if err := s.db.WithContext(ctx).Create(user).Error; err != nil {
+	if err := s.userRepo.Create(ctx, user); err != nil {
 		return nil, utils.ErrInternalServer
 	}
 
@@ -66,9 +65,9 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (*db.Us
 		return nil, "", utils.ErrUnauthorized
 	}
 
-	var user db.User
-	if err := s.db.WithContext(ctx).Where("email = ?", email).First(&user).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+	user, err := s.userRepo.GetByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, utils.ErrNotFound) {
 			return nil, "", utils.ErrUnauthorized
 		}
 		return nil, "", utils.ErrInternalServer
@@ -83,5 +82,5 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (*db.Us
 		return nil, "", utils.ErrInternalServer
 	}
 
-	return &user, token, nil
+	return user, token, nil
 }

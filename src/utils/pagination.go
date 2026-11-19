@@ -5,7 +5,6 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"go-gin-todo/src/db"
 )
 
 const (
@@ -14,6 +13,16 @@ const (
 	DefaultLimit    = 10
 	DefaultLimitStr = "10"
 )
+
+// Pagination holds computed pagination metadata for list responses.
+type Pagination struct {
+	Page       int   `json:"page"`
+	Limit      int   `json:"limit"`
+	TotalItems int64 `json:"totalItems"`
+	TotalPages int   `json:"totalPages"`
+	HasNext    bool  `json:"hasNext"`
+	HasPrev    bool  `json:"hasPrev"`
+}
 
 // ParsePagination extracts and normalizes page and limit from Gin query parameters.
 func ParsePagination(c *gin.Context) (int, int) {
@@ -31,7 +40,7 @@ func ParsePagination(c *gin.Context) (int, int) {
 }
 
 // CalculatePagination builds standard pagination metadata.
-func CalculatePagination(page, limit int, totalItems int64) db.Pagination {
+func CalculatePagination(page, limit int, totalItems int64) Pagination {
 	if limit <= 0 {
 		limit = DefaultLimit
 	}
@@ -44,7 +53,7 @@ func CalculatePagination(page, limit int, totalItems int64) db.Pagination {
 		totalPages = int(math.Ceil(float64(totalItems) / float64(limit)))
 	}
 
-	return db.Pagination{
+	return Pagination{
 		Page:       page,
 		Limit:      limit,
 		TotalItems: totalItems,
