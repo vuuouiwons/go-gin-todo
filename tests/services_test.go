@@ -1,4 +1,4 @@
-package business_test
+package tests
 
 import (
 	"context"

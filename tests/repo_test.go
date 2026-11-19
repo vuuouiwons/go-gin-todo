@@ -1,4 +1,4 @@
-package data
+package tests
 
 import (
 	"context"
@@ -7,14 +7,15 @@ import (
 	"testing"
 
 	"go-gin-todo/src/business"
+	"go-gin-todo/src/data"
 	"go-gin-todo/src/shared"
 	"gorm.io/gorm"
 )
 
-func setupTestDB(t *testing.T) (*gorm.DB, *UserRepository, *TodolistRepository, *TodoRepository) {
+func setupRepoTestDB(t *testing.T) (*gorm.DB, *data.UserRepository, *data.TodolistRepository, *data.TodoRepository) {
 	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "repo_test.db")
-	database, err := Connect(dbPath)
+	database, err := data.Connect(dbPath)
 	if err != nil {
 		t.Fatalf("Failed to connect to test db: %v", err)
 	}
@@ -25,12 +26,12 @@ func setupTestDB(t *testing.T) (*gorm.DB, *UserRepository, *TodolistRepository, 
 		}
 	})
 
-	return database, NewUserRepository(database), NewTodolistRepository(database), NewTodoRepository(database)
+	return database, data.NewUserRepository(database), data.NewTodolistRepository(database), data.NewTodoRepository(database)
 }
 
 func TestUserRepository_CRUD(t *testing.T) {
 	ctx := context.Background()
-	_, userRepo, _, _ := setupTestDB(t)
+	_, userRepo, _, _ := setupRepoTestDB(t)
 
 	user := &business.User{Email: "bob@example.com", Password: "hashedpassword"}
 	if err := userRepo.Create(ctx, user); err != nil {
@@ -58,7 +59,7 @@ func TestUserRepository_CRUD(t *testing.T) {
 
 func TestTodolistRepository_CRUDAndWithTx(t *testing.T) {
 	ctx := context.Background()
-	database, _, listRepo, _ := setupTestDB(t)
+	database, _, listRepo, _ := setupRepoTestDB(t)
 
 	item := &business.Todolist{UserID: 1, Title: "List A"}
 	if err := listRepo.Create(ctx, item); err != nil {
@@ -104,7 +105,7 @@ func TestTodolistRepository_CRUDAndWithTx(t *testing.T) {
 
 func TestTodoRepository_CRUDAndWithTx(t *testing.T) {
 	ctx := context.Background()
-	database, _, _, todoRepo := setupTestDB(t)
+	database, _, _, todoRepo := setupRepoTestDB(t)
 
 	todo := &business.Todo{UserID: 1, Message: "Task 1", Check: false}
 	if err := todoRepo.Create(ctx, todo); err != nil {

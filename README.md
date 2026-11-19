@@ -33,16 +33,14 @@ go-gin-todo/
 │   │   ├── interfaces.go                         # Repository interfaces (IUserRepository, ITodolistRepository, ITodoRepository)
 │   │   ├── auth_service.go                       # Registration, password hashing, JWT issuing
 │   │   ├── todolist_service.go                   # Todolist business rules
-│   │   ├── todo_service.go                       # Todo business rules
-│   │   └── services_test.go                      # Unit tests for business logic & transaction rollbacks
+│   │   └── todo_service.go                       # Todo business rules
 │   │
 │   ├── data/                                     # 3. Data Access Layer (Repository Implementations, Entities, Mappers)
 │   │   ├── connection.go                         # SQLite connection & auto-migrations
 │   │   ├── entities.go                           # GORM ORM models & entity-to-domain mappers
 │   │   ├── user_repository.go                    # Concrete implementation of IUserRepository
 │   │   ├── todolist_repository.go                # Concrete implementation of ITodolistRepository (CRUD, bulk transaction)
-│   │   ├── todo_repository.go                    # Concrete implementation of ITodoRepository (CRUD, bulk transaction)
-│   │   └── repo_test.go                          # Repository query unit tests & WithTx validation
+│   │   └── todo_repository.go                    # Concrete implementation of ITodoRepository (CRUD, bulk transaction)
 │   │
 │   └── shared/                                   # Shared Utilities (Custom Domain Errors, Pure Utilities)
 │       ├── auth.go                               # Bcrypt hashing & JWT token manager
@@ -50,8 +48,10 @@ go-gin-todo/
 │       ├── pagination.go                         # Pagination helpers & calculation
 │       └── config.go                             # Environment configuration loader
 ├── tests/
+│   ├── api_test.go                               # HTTP E2E tests across all endpoints
 │   ├── integration_test.go                       # Isolated DB tests for queries & transactions
-│   └── api_test.go                               # HTTP E2E tests across all endpoints
+│   ├── services_test.go                          # Business service tests & transaction rollback validation
+│   └── repo_test.go                              # Repository CRUD & WithTx tests
 ├── .dockerignore
 ├── .env.example
 ├── .gitignore
