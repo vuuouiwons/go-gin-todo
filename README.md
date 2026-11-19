@@ -224,7 +224,7 @@ Both `GET /api/v1/todolist` and `GET /api/v1/todo` accept standard pagination qu
 | `POST` | `/api/v1/todolist` | Create single `{"title": "..."}` or bulk `[{"title": "..."}, ...]` |
 | `PATCH` | `/api/v1/todolist` | Update single `{"id": 1, "title": "..."}` or bulk `[{"id": 1, ...}]` |
 | `PATCH` | `/api/v1/todolist/:id` | Update single by URL ID `{"title": "..."}` |
-| `DELETE` | `/api/v1/todolist` | Delete strictly via body `[1, 2]` or `{"id": 1}` or `{"ids": [1, 2]}` |
+| `DELETE` | `/api/v1/todolist` | Delete strictly via body `{"ids": [1, 2, 3]}` |
 | `DELETE` | `/api/v1/todolist/:id` | Delete single by URL ID |
 
 ---
@@ -238,5 +238,5 @@ Both `GET /api/v1/todolist` and `GET /api/v1/todo` accept standard pagination qu
 | `POST` | `/api/v1/todo` | Create single `{"message": "...", "check": false}` or bulk `[...]` |
 | `PATCH` | `/api/v1/todo` | Update single `{"id": 1, "check": true}` or bulk `[{"id": 1, ...}]` |
 | `PATCH` | `/api/v1/todo/:id` | Update single by URL ID `{"message": "...", "check": true}` |
-| `DELETE` | `/api/v1/todo` | Delete strictly via body `[1, 2]` or `{"id": 1}` or `{"ids": [1, 2]}` |
+| `DELETE` | `/api/v1/todo` | Delete strictly via body `{"ids": [1, 2, 3]}` |
 | `DELETE` | `/api/v1/todo/:id` | Delete single by URL ID |

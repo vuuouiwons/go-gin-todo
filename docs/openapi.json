@@ -296,34 +296,19 @@
           "content": {
             "application/json": {
               "schema": {
-                "oneOf": [
-                  {
+                "type": "object",
+                "required": ["ids"],
+                "properties": {
+                  "ids": {
                     "type": "array",
-                    "items": { "type": "integer" }
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "id": { "type": "integer" },
-                      "ids": {
-                        "type": "array",
-                        "items": { "type": "integer" }
-                      }
-                    }
+                    "items": { "type": "integer" },
+                    "description": "List of IDs to delete"
                   }
-                ]
+                }
               },
               "examples": {
-                "single": {
-                  "summary": "Delete single by body",
-                  "value": { "id": 1 }
-                },
-                "bulkArray": {
-                  "summary": "Delete multiple by ID array",
-                  "value": [1, 2, 3]
-                },
-                "bulkObject": {
-                  "summary": "Delete multiple by IDs object",
+                "delete": {
+                  "summary": "Delete by IDs",
                   "value": { "ids": [1, 2, 3] }
                 }
               }
@@ -641,34 +626,19 @@
           "content": {
             "application/json": {
               "schema": {
-                "oneOf": [
-                  {
+                "type": "object",
+                "required": ["ids"],
+                "properties": {
+                  "ids": {
                     "type": "array",
-                    "items": { "type": "integer" }
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "id": { "type": "integer" },
-                      "ids": {
-                        "type": "array",
-                        "items": { "type": "integer" }
-                      }
-                    }
+                    "items": { "type": "integer" },
+                    "description": "List of IDs to delete"
                   }
-                ]
+                }
               },
               "examples": {
-                "single": {
-                  "summary": "Delete single by body",
-                  "value": { "id": 1 }
-                },
-                "bulkArray": {
-                  "summary": "Delete multiple by ID array",
-                  "value": [1, 2, 3]
-                },
-                "bulkObject": {
-                  "summary": "Delete multiple by IDs object",
+                "delete": {
+                  "summary": "Delete by IDs",
                   "value": { "ids": [1, 2, 3] }
                 }
               }
